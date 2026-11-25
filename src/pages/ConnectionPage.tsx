@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Alert, Button, Form, Input, Popconfirm, Space, Typography } from 'antd';
+import { ServerError } from '../data/serverClient';
 import { connection, useConnection } from '../data/connection';
 import { live, useLive } from '../data/liveApp';
 
@@ -11,6 +12,13 @@ export default function ConnectionPage() {
   const [password, setPassword] = useState('');
   const busy = c.status === 'connecting';
   const lv = useLive();
+  const [cur, setCur] = useState('');
+  const [nw, setNw] = useState('');
+  const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const changePw = async () => {
+    try { await connection.client()?.changePassword(cur, nw); setCur(''); setNw(''); setPwMsg({ ok: true, text: 'Your password is changed.' }); }
+    catch (e) { setPwMsg({ ok: false, text: e instanceof ServerError || e instanceof Error ? e.message : 'Could not change the password' }); }
+  };
 
   const submit = async () => {
     await connection.connect(address, id, password);
@@ -34,6 +42,13 @@ export default function ConnectionPage() {
               description={`Last read at ${lv.at ? new Date(lv.at).toLocaleTimeString() : 'just now'}. Your changes are sent a moment after you make them, and other people's changes are read every twenty seconds and when you come back to this window.`} />
           )}
           <Button onClick={() => void live.refreshNow()} loading={lv.saving}>Save and read now</Button>
+          <Form layout="vertical" onFinish={changePw} requiredMark={false} autoComplete="off">
+            <Typography.Text strong>Change my password</Typography.Text>
+            <Form.Item label="Current password" style={{ marginTop: 8 }}><Input.Password value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="off" /></Form.Item>
+            <Form.Item label="New password" extra="At least 10 characters."><Input.Password value={nw} onChange={(e) => setNw(e.target.value)} autoComplete="off" /></Form.Item>
+            {pwMsg && <Alert type={pwMsg.ok ? 'success' : 'error'} showIcon title={pwMsg.text} style={{ marginBottom: 12 }} />}
+            <Button htmlType="submit" disabled={!cur || nw.length < 10}>Change password</Button>
+          </Form>
           <Popconfirm disabled={!lv.unsaved} title="Some changes have not reached the server yet." description="If you disconnect now they are lost." okText="Disconnect anyway" onConfirm={() => connection.disconnect()}>
             <Button onClick={() => { if (!lv.unsaved) connection.disconnect(); }}>Disconnect</Button>
           </Popconfirm>

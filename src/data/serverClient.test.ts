@@ -84,4 +84,14 @@ describe('client: every kind of record the sync uses is accepted (found by the r
       expect(calls[1].url).toContain('/api/docs/' + kind);
     }
   });
+  it('changes my own password with the sign-in token, and does not keep either password', async () => {
+    const { f, calls } = fake([{ status: 200, json: { token: 'tok9' } }, { status: 200, json: { ok: true } }]);
+    const c = createClient('https://s.example.org', f);
+    await c.login('a', 'old-password-1');
+    await c.changePassword('old-password-1', 'new-password-22');
+    expect(calls[1].url).toBe('https://s.example.org/api/me/password');
+    expect(calls[1].init.method).toBe('POST');
+    expect(JSON.parse(calls[1].init.body as string)).toEqual({ current: 'old-password-1', next: 'new-password-22' });
+    expect((calls[1].init.headers as Record<string, string>).authorization).toBe('Bearer tok9');
+  });
 });

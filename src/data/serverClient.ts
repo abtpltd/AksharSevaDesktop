@@ -71,6 +71,8 @@ export function createClient(baseRaw: string, fetchFn: typeof fetch = (...a) => 
     },
     signOut(): void { token = null; },
     me: () => call<Record<string, unknown>>('GET', '/api/me'),
+    /** Change my own password. The server checks the current one. */
+    changePassword: async (current: string, next: string) => { await call<unknown>('POST', '/api/me/password', { current, next }); },
     // async, so a bad kind or id is a rejected answer like any other failure
     list: async (kind: string) => call<unknown[]>('GET', docPath(kind)),
     /** Records deleted on the server (id, level, wing, version, never the text), so a computer can tell "deleted" from "missing". */
