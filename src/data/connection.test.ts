@@ -18,6 +18,13 @@ describe('connection to the server', () => {
     const c = createConnection({ storage: s });
     expect(c.get()).toMatchObject({ status: 'local', base: 'https://nairobi.example.org' });
   });
+  it('opened from the server itself, it already knows the server address (everything online)', () => {
+    const { m, s } = memory();
+    expect(createConnection({ storage: s, origin: 'https://aksharseva.appspot.com' }).get().base).toBe('https://aksharseva.appspot.com');
+    m.set('aksharseva.server', 'https://other.example.org');
+    expect(createConnection({ storage: s, origin: 'https://aksharseva.appspot.com' }).get().base).toBe('https://other.example.org'); // what was saved wins
+    expect(createConnection({ storage: memory().s, origin: 'http://localhost:1420' }).get().base).toBe(''); // a test or development copy does not guess
+  });
   it('connects, shows who is signed in, and remembers only the address', async () => {
     const { m, s } = memory();
     const c = createConnection({ storage: s, fetchFn: answer([{ status: 200, json: { token: 'TOK' } }, { status: 200, json: { id: 'admin', name: 'Administrator', role: 'admin', org: 'world/kenya/nairobi' } }]) });

@@ -12,10 +12,12 @@ const browserStore = (): Store | undefined => { try { return typeof localStorage
  * The link to a center's server. Only the server address is remembered, on this computer. The password is used once and dropped;
  * the token stays in memory inside the client, so closing the app signs you out.
  */
-export function createConnection(opts: { storage?: Store; fetchFn?: typeof fetch } = {}) {
+export function createConnection(opts: { storage?: Store; fetchFn?: typeof fetch; origin?: string } = {}) {
   const storage = opts.storage ?? browserStore();
   const remembered = (() => { try { return storage?.getItem(KEY) ?? ''; } catch { return ''; } })();
-  let state: ConnState = { status: 'local', base: remembered };
+  // Opened from the center's own server (https), the app already knows where that server is, so nobody types it.
+  const origin = opts.origin ?? (typeof location !== 'undefined' ? location.origin : '');
+  let state: ConnState = { status: 'local', base: remembered || (origin.startsWith('https://') ? origin : '') };
   let client: Client | null = null;
   const listeners = new Set<() => void>();
   const set = (next: ConnState) => { state = next; listeners.forEach((l) => l()); };
