@@ -8,6 +8,7 @@ import { clock12 } from '../core/time';
 import { go } from '../ui/router';
 import { DEFAULT_TEMPLATE_ID, DEFAULT_TEMPLATE_NAME, visibleTemplates } from '../core/templates';
 import { suggestedDates } from '../core/sabhaDates';
+import { comingAtAGlance } from '../core/glance';
 
 const KIND_LABEL = { weekly: 'Usual weekly slot', flexible: 'Lead chooses each time', event: 'Raised when needed' } as const;
 
@@ -15,10 +16,26 @@ export default function HomePage() {
   const s = useAppState();
   const [target, setTarget] = useState<Sabha | null>(null);
   const sabhaName = (id: string) => s.sabhas.find((x) => x.id === id)?.name ?? 'Sabha';
+  const glance = useMemo(() => comingAtAGlance(s.sabhas, s.meetings, dayjs().format('YYYY-MM-DD')), [s.sabhas, s.meetings]);
   const upcomingFirst = useMemo(() => [...s.meetings].sort((a, b) => b.date.localeCompare(a.date) || b.start.localeCompare(a.start)), [s.meetings]);
 
   return (
     <>
+      {glance.length > 0 && (
+        <>
+          <Typography.Title level={3} style={{ marginTop: 0 }}>Coming up</Typography.Title>
+          <div data-testid="glance" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12, marginBottom: 24 }}>
+            {glance.map((g) => (
+              <Card key={g.sabha.id} size="small" title={g.sabha.name} extra={<span className="muted">{dayjs(g.meeting.date).format('ddd D MMM')}, {clock12(g.meeting.start)}</span>}>
+                <div>{g.items} program {g.items === 1 ? 'item' : 'items'}{g.items ? `, ${g.minutes} min, ends ${clock12(g.ends)}` : ''}</div>
+                <div>{g.slides} {g.slides === 1 ? 'slide' : 'slides'}, {g.donors} {g.donors === 1 ? 'donor' : 'donors'}</div>
+                {g.notes.map((n) => <div key={n} className="muted">{n}</div>)}
+                <Button style={{ marginTop: 8 }} onClick={() => go(`/meeting/${g.meeting.id}`)}>Open</Button>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
       <Typography.Title level={3} style={{ marginTop: 0 }}>Sabhas and meetings</Typography.Title>
       <p className="muted">Each sabha keeps its own pattern, but every meeting stands on its own: its own date, time, venue, program and announcements.</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
