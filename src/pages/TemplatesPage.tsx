@@ -108,7 +108,10 @@ function TemplateEditor({ templateId }: { templateId: string }) {
   return (
     <>
       <Button icon={<ArrowLeftOutlined />} onClick={() => go('/templates')}>Back to templates</Button>
-      <Typography.Title level={3} style={{ marginTop: 12 }}>{tpl.name}</Typography.Title>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+        <Typography.Title level={3} style={{ margin: 0 }}>{tpl.name}</Typography.Title>
+        <Button type="primary" icon={<EditOutlined />} onClick={() => setEditor(cursor)} disabled={!pages.length}>Open full slide editor</Button>
+      </div>
       <p className="muted">These are the slides a new meeting starts with. Write <b>{'{sabha}'}</b> in a small title and each meeting puts in its own sabha name. Anyone making a meeting can still delete or add slides there.</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 400px) minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
         <div>
@@ -123,7 +126,9 @@ function TemplateEditor({ templateId }: { templateId: string }) {
                 <Tooltip title="Move down"><Button size="small" icon={<ArrowDownOutlined />} disabled={i === blocks.length - 1} onClick={() => move(i, 1)} aria-label="Move down" /></Tooltip>
                 {b.kind === 'canvas'
                   ? <Tooltip title="Open in the slide editor"><Button size="small" icon={<EditOutlined />} onClick={() => setEditor(Math.max(0, pageBlockIndex.indexOf(i)))} aria-label="Open in the slide editor" /></Tooltip>
-                  : b.kind !== 'opening' && b.kind !== 'closing' && <Tooltip title="Edit"><Button size="small" icon={<EditOutlined />} onClick={() => setEditing({ block: b, isNew: false })} aria-label="Edit slide" /></Tooltip>}
+                  : (b.kind === 'opening' || b.kind === 'closing')
+                    ? <Tooltip title="Open in the slide editor"><Button size="small" icon={<EditOutlined />} onClick={() => setEditor(Math.max(0, pageBlockIndex.indexOf(i)))} aria-label="Open in the slide editor" /></Tooltip>
+                    : <Tooltip title="Edit"><Button size="small" icon={<EditOutlined />} onClick={() => setEditing({ block: b, isNew: false })} aria-label="Edit slide" /></Tooltip>}
                 <Tooltip title="Remove"><Button size="small" danger icon={<DeleteOutlined />} onClick={() => setBlocks(blocks.filter((x) => x.id !== b.id))} aria-label="Remove slide" /></Tooltip>
               </Space>
             </div>
@@ -134,7 +139,7 @@ function TemplateEditor({ templateId }: { templateId: string }) {
           <Button style={{ marginLeft: 8 }} type="primary" ghost icon={<EditOutlined />} onClick={() => setEditor(cursor)} disabled={!pages.length}>Slide editor</Button>
         </div>
         <div>
-          <SlidePreview page={pages[cursor]} std={std} />
+          <div onDoubleClick={() => pages.length && setEditor(cursor)} title="Double-click to edit this slide freely"><SlidePreview page={pages[cursor]} std={std} /></div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0' }}>
             <Button icon={<LeftOutlined />} disabled={cursor <= 0} onClick={() => setCursor(cursor - 1)} aria-label="Previous slide" />
             <span className="muted">{pages.length ? `Slide ${cursor + 1} of ${pages.length}` : 'No slides yet'}</span>
