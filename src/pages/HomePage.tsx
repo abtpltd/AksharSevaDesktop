@@ -70,11 +70,11 @@ export default function HomePage() {
   );
 }
 
-function NewMeeting({ sabha, onClose }: { sabha: Sabha; onClose: () => void }) {
+export function NewMeeting({ sabha, onClose, date: firstDate }: { sabha: Sabha; onClose: () => void; date?: string }) {
   const s = useAppState();
   const previous = useMemo(() => [...s.meetings].filter((m) => m.sabhaId === sabha.id).sort((a, b) => b.date.localeCompare(a.date))[0], [s.meetings, sabha.id]);
   const usual = useMemo(() => suggestedDates(sabha, s.meetings, dayjs().format('YYYY-MM-DD')), [sabha, s.meetings]); // the next dates of the sabha's weekly rhythm
-  const [date, setDate] = useState<Dayjs | null>(usual.length ? dayjs(usual[0]) : dayjs());
+  const [date, setDate] = useState<Dayjs | null>(firstDate ? dayjs(firstDate) : usual.length ? dayjs(usual[0]) : dayjs());
   const [start, setStart] = useState<Dayjs | null>(dayjs(`2000-01-01T${sabha.defaultStart}`));
   const [venue, setVenue] = useState(sabha.defaultVenue);
   const [copy, setCopy] = useState(true);

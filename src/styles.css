@@ -58,3 +58,27 @@ body { background: #f3f6fa; font-family: Inter, "Segoe UI", system-ui, sans-seri
 .ce-field input[type=color] { width: 44px; height: 28px; padding: 0; border: 1px solid #cfd7e0; border-radius: 6px; background: #fff; }
 .ce-field input[type=checkbox] { width: 16px; height: 16px; }
 .ce-inline { display: flex; gap: 8px; align-items: center; }
+
+.cal-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.cal-title{flex:1;min-width:140px;font-size:16px;font-weight:500}
+.cal-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.cal-chip{display:inline-flex;gap:6px;align-items:center;border:1px solid #d0d5dd;border-radius:99px;padding:2px 12px;font-size:12px;cursor:pointer;background:#fff}
+.cal-chip i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.cal-sw{font-size:12px;display:inline-flex;gap:6px;align-items:center}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-top:1px solid #e3e6ea;border-left:1px solid #e3e6ea;background:#fff}
+.cal-dh{padding:4px;font-size:12px;text-align:center;color:#667085;background:#f4f5f7;border-right:1px solid #e3e6ea;border-bottom:1px solid #e3e6ea}
+.cal-cell{min-height:92px;padding:3px;border-right:1px solid #e3e6ea;border-bottom:1px solid #e3e6ea;cursor:pointer;overflow:hidden}
+.cal-cell.wk{min-height:180px}
+.cal-cell:hover{background:#f7f9fc}
+.cal-cell.out{background:#f4f5f7;color:#98a2b3}
+.cal-cell.sel{box-shadow:inset 0 0 0 2px #1370b6}
+.cal-dn{display:inline-flex;width:22px;height:22px;align-items:center;justify-content:center;border-radius:50%;font-size:12px}
+.cal-dn.today{background:#1370b6;color:#fff}
+.cal-ev{display:block;font-size:11px;line-height:1.35;border-radius:4px;padding:1px 5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:fit-content;max-width:100%}
+.cal-agenda{border-top:1px solid #e3e6ea;background:#fff}
+.cal-arow{display:flex;gap:12px;align-items:center;padding:8px 10px;border-bottom:1px solid #e3e6ea;cursor:pointer}
+.cal-arow.sel{background:#eef5fc}
+.cal-adate{width:80px;font-weight:500}
+.cal-panel{margin-top:12px;border:1px solid #e3e6ea;border-radius:12px;padding:12px 14px;background:#fff}
+.cal-prow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-top:1px solid #eef0f3;margin-top:8px}
+.cal-prow .grow{flex:1;min-width:200px}

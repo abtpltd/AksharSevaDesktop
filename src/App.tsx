@@ -1,9 +1,10 @@
 import { Alert, App as AntApp, Button, ConfigProvider, Layout, Menu, Spin } from 'antd';
-import { ApiOutlined, AppstoreOutlined, CalendarOutlined, FormatPainterOutlined } from '@ant-design/icons';
+import { ApiOutlined, AppstoreOutlined, CalendarOutlined, FormatPainterOutlined, ScheduleOutlined } from '@ant-design/icons';
 import { useConnection } from './data/connection';
 import { live, useLive } from './data/liveApp';
 import { go, useRoute } from './ui/router';
 import HomePage from './pages/HomePage';
+import CalendarPage from './pages/CalendarPage';
 import MeetingPage from './pages/MeetingPage';
 import ConnectionPage from './pages/ConnectionPage';
 import StandardPage from './pages/StandardPage';
@@ -22,7 +23,7 @@ export default function App() {
   const presentId = route.startsWith('/present/') ? route.slice('/present/'.length) : '';
   const presenterId = route.startsWith('/presenter/') ? route.slice('/presenter/'.length) : '';
   const templateId = route.startsWith('/templates/') ? route.slice('/templates/'.length) : '';
-  const selected = route === '/connection' ? 'connection' : route === '/standard' ? 'standard' : route.startsWith('/templates') ? 'templates' : 'home';
+  const selected = route === '/calendar' ? 'calendar' : route === '/connection' ? 'connection' : route === '/standard' ? 'standard' : route.startsWith('/templates') ? 'templates' : 'home';
 
   return (
     <ConfigProvider theme={{ token: { colorPrimary: '#1370b6', borderRadius: 10, fontFamily: 'Inter, "Segoe UI", system-ui, sans-serif' } }}>
@@ -35,6 +36,7 @@ export default function App() {
             <Menu
               theme="dark" mode="inline" selectedKeys={[selected]}
               items={[
+                { key: 'calendar', icon: <ScheduleOutlined />, label: 'Calendar', onClick: () => go('/calendar') },
                 { key: 'home', icon: <CalendarOutlined />, label: 'Sabhas and meetings', onClick: () => go('/') },
                 { key: 'templates', icon: <AppstoreOutlined />, label: 'Slide templates', onClick: () => go('/templates') },
                 { key: 'standard', icon: <FormatPainterOutlined />, label: 'Slide standard', onClick: () => go('/standard') },
@@ -51,7 +53,7 @@ export default function App() {
             )}
             <div className="page">
               <ErrorBoundary resetKey={route}>
-              {!ready ? (conn.status === 'connected' ? <Spin tip="Reading from the server..."><div style={{ padding: 48 }} /></Spin> : <ConnectionPage />) : route === '/connection' ? <ConnectionPage /> : route === '/standard' ? <StandardPage /> : route.startsWith('/templates') ? <TemplatesPage templateId={templateId} /> : meetingId ? <MeetingPage meetingId={meetingId} /> : <HomePage />}
+              {!ready ? (conn.status === 'connected' ? <Spin tip="Reading from the server..."><div style={{ padding: 48 }} /></Spin> : <ConnectionPage />) : route === '/connection' ? <ConnectionPage /> : route === '/calendar' ? <CalendarPage /> : route === '/standard' ? <StandardPage /> : route.startsWith('/templates') ? <TemplatesPage templateId={templateId} /> : meetingId ? <MeetingPage meetingId={meetingId} /> : <HomePage />}
               </ErrorBoundary>
             </div>
           </Layout.Content>
