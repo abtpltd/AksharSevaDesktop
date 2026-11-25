@@ -5,11 +5,12 @@ import { App, Button, Form, Input, Modal, Upload } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import type { DeckBlock, DeckBlockKind } from '../core/types';
 import { uid } from '../core/defaults';
+import { blankCanvas } from '../core/canvas';
 import { fileToDataUrl } from '../ui/image';
 import { AddToLibrary, PosterPicker } from './PosterLibrary';
 
 export const KIND_NAME: Record<DeckBlock['kind'], string> = {
-  opening: 'Opening slide', closing: 'Closing slide', text: 'Text announcement', list: 'Numbered list', table: 'Table', poster: 'Poster and details', prasad: 'Prasad sponsors',
+  opening: 'Opening slide', closing: 'Closing slide', text: 'Text announcement', list: 'Numbered list', table: 'Table', poster: 'Poster and details', prasad: 'Prasad sponsors', canvas: 'Custom slide',
 };
 
 /** A new empty block of a kind. In a template, pass the token {sabha} as the name so each meeting fills in its own. */
@@ -23,6 +24,7 @@ export const blankBlock = (kind: DeckBlockKind, sabhaName: string): DeckBlock =>
     case 'prasad': return { id, kind, label: `${sabhaName} Prasad Seva` };
     case 'opening': return { id, kind };
     case 'closing': return { id, kind };
+    case 'canvas': return { ...blankCanvas(sabhaName), id };
   }
 };
 
@@ -34,6 +36,7 @@ export const summary = (b: DeckBlock, donorCount: number): string => {
     case 'table': return `Table (${b.rows.length} rows)`;
     case 'poster': return b.heading || 'Poster';
     case 'prasad': return `${b.label || 'Prasad sponsors'} (${donorCount})`;
+    case 'canvas': return b.elements.find((e) => e.type === 'text' && e.text.trim() !== '')?.type === 'text' ? (b.elements.find((e) => e.type === 'text' && e.text.trim() !== '') as { text: string }).text.split('\n')[0].slice(0, 60) : 'Custom slide';
   }
 };
 

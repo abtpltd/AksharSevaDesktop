@@ -1,4 +1,4 @@
-import type { DeckBlock, Donor, SlideStandard } from './types';
+import type { CanvasElement, Chrome, DeckBlock, Donor, SlideStandard } from './types';
 
 export interface ListItem { n: number; text: string; sub: string }
 
@@ -8,7 +8,8 @@ export type Page =
   | { kind: 'text'; blockId: string; label: string; heading: string; lines: string[] }
   | { kind: 'list'; blockId: string; label: string; heading: string; items: ListItem[] }
   | { kind: 'table'; blockId: string; label: string; rows: [string, string][] }
-  | { kind: 'poster'; blockId: string; label: string; heading: string; lines: string[]; image: string };
+  | { kind: 'poster'; blockId: string; label: string; heading: string; lines: string[]; image: string }
+  | { kind: 'canvas'; blockId: string; label: string; chrome: Chrome; bg: string; elements: CanvasElement[] };
 
 export const TEXT_LINES_PER_SLIDE = 7;
 export const TABLE_ROWS_PER_SLIDE = 5;
@@ -62,6 +63,9 @@ export function buildPages(deck: DeckBlock[], donors: Donor[], standard: SlideSt
         (parts.length ? parts : [[]]).forEach((r) => pages.push({ kind: 'table', blockId: b.id, label: b.label, rows: r }));
         break;
       }
+      case 'canvas':
+        pages.push({ kind: 'canvas', blockId: b.id, label: b.label, chrome: b.chrome, bg: b.bg, elements: b.elements });
+        break;
       case 'poster':
         pages.push({ kind: 'poster', blockId: b.id, label: b.label, heading: b.heading, lines: cleanLines(b.lines), image: b.image });
         break;

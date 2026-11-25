@@ -7,6 +7,7 @@ import { buildPages } from '../core/pages';
 import type { DeckBlock, DeckBlockKind } from '../core/types';
 import SlidePreview from '../deck/SlidePreview';
 import BlockEditor, { KIND_NAME, blankBlock, summary } from './BlockEditor';
+import CanvasEditor from './CanvasEditor';
 import { go } from '../ui/router';
 
 /** Where a template stands for this center: built in, made here, or made by a level above. */
@@ -78,6 +79,7 @@ function TemplateEditor({ templateId }: { templateId: string }) {
   const tpl = s.templates.find((t) => t.id === templateId && t.org === s.workingOrg);
   const [cursor, setCursor] = useState(0);
   const [editing, setEditing] = useState<{ block: DeckBlock; isNew: boolean } | null>(null);
+  const [editor, setEditor] = useState<number | null>(null);
   const blocks = tpl?.blocks ?? [];
   // The preview shows each small title with a sample sabha name in place of {sabha}. Slides are made from one filled copy,
   // so each slide can be matched back to its block by position (filling gives new ids every time it runs).
@@ -100,6 +102,7 @@ function TemplateEditor({ templateId }: { templateId: string }) {
   const hasPrasad = blocks.some((b) => b.kind === 'prasad');
   const addItems = (['text', 'list', 'table', 'poster'] as DeckBlockKind[]).map((k) => ({ key: k, label: KIND_NAME[k] }));
   if (!hasPrasad) addItems.push({ key: 'prasad', label: KIND_NAME.prasad });
+  addItems.push({ key: 'canvas', label: 'Custom slide (free layout)' });
   const showBlock = (i: number) => { const n = pageBlockIndex.indexOf(i); if (n >= 0) setCursor(n); };
 
   return (
@@ -118,14 +121,17 @@ function TemplateEditor({ templateId }: { templateId: string }) {
               <Space size={2}>
                 <Tooltip title="Move up"><Button size="small" icon={<ArrowUpOutlined />} disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up" /></Tooltip>
                 <Tooltip title="Move down"><Button size="small" icon={<ArrowDownOutlined />} disabled={i === blocks.length - 1} onClick={() => move(i, 1)} aria-label="Move down" /></Tooltip>
-                {b.kind !== 'opening' && b.kind !== 'closing' && <Tooltip title="Edit"><Button size="small" icon={<EditOutlined />} onClick={() => setEditing({ block: b, isNew: false })} aria-label="Edit slide" /></Tooltip>}
+                {b.kind === 'canvas'
+                  ? <Tooltip title="Open in the slide editor"><Button size="small" icon={<EditOutlined />} onClick={() => setEditor(Math.max(0, pageBlockIndex.indexOf(i)))} aria-label="Open in the slide editor" /></Tooltip>
+                  : b.kind !== 'opening' && b.kind !== 'closing' && <Tooltip title="Edit"><Button size="small" icon={<EditOutlined />} onClick={() => setEditing({ block: b, isNew: false })} aria-label="Edit slide" /></Tooltip>}
                 <Tooltip title="Remove"><Button size="small" danger icon={<DeleteOutlined />} onClick={() => setBlocks(blocks.filter((x) => x.id !== b.id))} aria-label="Remove slide" /></Tooltip>
               </Space>
             </div>
           ))}
-          <Dropdown menu={{ items: addItems, onClick: ({ key }) => { const k = key as DeckBlockKind; const b = blankBlock(k, '{sabha}'); if (k === 'prasad') insert(b); else setEditing({ block: b, isNew: true }); } }} trigger={['click']}>
+          <Dropdown menu={{ items: addItems, onClick: ({ key }) => { const k = key as DeckBlockKind; const b = blankBlock(k, '{sabha}'); if (k === 'canvas') { insert(b); setEditor(Math.max(0, blocks.findIndex((x) => x.kind === 'closing') < 0 ? blocks.length : blocks.findIndex((x) => x.kind === 'closing'))); } else if (k === 'prasad') insert(b); else setEditing({ block: b, isNew: true }); } }} trigger={['click']}>
             <Button icon={<PlusOutlined />}>Add slide</Button>
           </Dropdown>
+          <Button style={{ marginLeft: 8 }} type="primary" ghost icon={<EditOutlined />} onClick={() => setEditor(cursor)} disabled={!pages.length}>Slide editor</Button>
         </div>
         <div>
           <SlidePreview page={pages[cursor]} std={std} />
@@ -137,6 +143,13 @@ function TemplateEditor({ templateId }: { templateId: string }) {
           <p className="muted">Preview with a sample sabha name and a sample donor.</p>
         </div>
       </div>
+      {editor !== null && (
+        <CanvasEditor
+          title={`${tpl.name}`} deck={blocks} donors={[{ id: 'd1', name: 'Sample donor name', occasion: 'On occasion of birthday' }]} std={std} startAt={editor} sabhaName="{sabha}"
+          onClose={() => setEditor(null)}
+          onSave={(deck) => { setBlocks(deck); setEditor(null); }}
+        />
+      )}
       {editing && (
         <BlockEditor
           key={editing.block.id} block={editing.block} onCancel={() => setEditing(null)}

@@ -11,6 +11,7 @@ import { addTicker, removeTicker, useTicker } from '../data/ticker';
 import { useScreen } from '../data/screen';
 import { downloadPptx } from '../deck/exportPptx';
 import BlockEditor, { KIND_NAME, blankBlock, summary } from './BlockEditor';
+import CanvasEditor from './CanvasEditor';
 
 export default function AnnouncementsTab({ meeting: m, sabhaName }: { meeting: Meeting; sabhaName: string }) {
   const { message } = App.useApp();
@@ -24,6 +25,7 @@ export default function AnnouncementsTab({ meeting: m, sabhaName }: { meeting: M
   const [dErr, setDErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [tplName, setTplName] = useState<string | null>(null);
+  const [editor, setEditor] = useState<number | null>(null);
   const tk = useTicker(m.id);
   const scr = useScreen(m.id);
   const addMsg = () => {
@@ -80,6 +82,7 @@ export default function AnnouncementsTab({ meeting: m, sabhaName }: { meeting: M
 
   const addItems = (['text', 'list', 'table', 'poster'] as DeckBlockKind[]).map((k) => ({ key: k, label: KIND_NAME[k] }));
   if (!hasPrasad) addItems.push({ key: 'prasad', label: KIND_NAME.prasad });
+  addItems.push({ key: 'canvas', label: 'Custom slide (free layout)' });
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 400px) minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
@@ -97,15 +100,18 @@ export default function AnnouncementsTab({ meeting: m, sabhaName }: { meeting: M
               <Space size={2}>
                 <Tooltip title="Move up"><Button size="small" icon={<ArrowUpOutlined />} disabled={i === 0} onClick={() => move(i, -1)} /></Tooltip>
                 <Tooltip title="Move down"><Button size="small" icon={<ArrowDownOutlined />} disabled={i === m.deck.length - 1} onClick={() => move(i, 1)} /></Tooltip>
-                {b.kind !== 'opening' && b.kind !== 'closing' && <Tooltip title="Edit"><Button size="small" icon={<EditOutlined />} onClick={() => setEditing({ block: b, isNew: false })} /></Tooltip>}
+                {b.kind === 'canvas'
+                  ? <Tooltip title="Open in the slide editor"><Button size="small" icon={<EditOutlined />} onClick={() => setEditor(Math.max(0, slidesOfBlock(pages, b.id)[0] - 1))} /></Tooltip>
+                  : b.kind !== 'opening' && b.kind !== 'closing' && <Tooltip title="Edit"><Button size="small" icon={<EditOutlined />} onClick={() => setEditing({ block: b, isNew: false })} /></Tooltip>}
                 <Tooltip title="Remove"><Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeBlock(b)} /></Tooltip>
               </Space>
             </div>
           );
         })}
-        <Dropdown menu={{ items: addItems, onClick: ({ key }) => { const k = key as DeckBlockKind; const b = blankBlock(k, sabhaName); if (k === 'prasad') { const closing = m.deck.findIndex((x) => x.kind === 'closing'); const next = [...m.deck]; next.splice(closing < 0 ? next.length : closing, 0, b); setDeck(next, `Added "${summary(b, m.donors.length)}"`); } else setEditing({ block: b, isNew: true }); } }} trigger={['click']}>
+        <Dropdown menu={{ items: addItems, onClick: ({ key }) => { const k = key as DeckBlockKind; const b = blankBlock(k, sabhaName); if (k === 'canvas') { const closing = m.deck.findIndex((x) => x.kind === 'closing'); const next = [...m.deck]; next.splice(closing < 0 ? next.length : closing, 0, b); setDeck(next, 'Added a custom slide'); const at = slidesOfBlock(buildPages(next, m.donors, std), b.id)[0]; setEditor(Math.max(0, (at ?? 1) - 1)); } else if (k === 'prasad') { const closing = m.deck.findIndex((x) => x.kind === 'closing'); const next = [...m.deck]; next.splice(closing < 0 ? next.length : closing, 0, b); setDeck(next, `Added "${summary(b, m.donors.length)}"`); } else setEditing({ block: b, isNew: true }); } }} trigger={['click']}>
           <Button icon={<PlusOutlined />}>Add announcement</Button>
         </Dropdown>
+        <Button style={{ marginLeft: 8 }} type={'primary'} ghost icon={<EditOutlined />} onClick={() => setEditor(cursor)} disabled={!pages.length}>Slide editor</Button>
         <Button style={{ marginLeft: 8 }} icon={<SaveOutlined />} onClick={() => setTplName('')}>Save as template</Button>
         <Button style={{ marginLeft: 8 }} icon={<HistoryOutlined />} onClick={() => setShowHistory(true)} disabled={!(m.history ?? []).length}>History</Button>
 
@@ -205,6 +211,14 @@ export default function AnnouncementsTab({ meeting: m, sabhaName }: { meeting: M
           </div>
         ))}
       </Modal>
+
+      {editor !== null && (
+        <CanvasEditor
+          title={`${sabhaName} slides`} deck={m.deck} donors={m.donors} std={std} startAt={editor} sabhaName={sabhaName}
+          onClose={() => setEditor(null)}
+          onSave={(deck, note) => { setDeck(deck, note); setEditor(null); message.success('Slides saved'); }}
+        />
+      )}
 
       {editing && (
         <BlockEditor

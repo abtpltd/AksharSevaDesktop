@@ -27,6 +27,7 @@ const withId = (b: DeckBlock): DeckBlock => {
     case 'table': return { id, kind: 'table', label: b.label, rows: b.rows.map((r) => [r[0], r[1]] as [string, string]) };
     case 'poster': return { id, kind: 'poster', label: b.label, heading: b.heading, lines: [...b.lines], image: b.image };
     case 'prasad': return { id, kind: 'prasad', label: b.label };
+    case 'canvas': return { id, kind: 'canvas', label: b.label, chrome: b.chrome, bg: b.bg, elements: b.elements.map((e) => ({ ...e, id: uid() })) };
   }
 };
 
@@ -35,6 +36,8 @@ export function fillTemplate(blocks: DeckBlock[], sabhaName: string): DeckBlock[
   return blocks.map((b) => {
     const c = withId(b);
     if ('label' in c) c.label = c.label.split(SABHA_TOKEN).join(sabhaName);
+    // a free slide may carry the token in any text box too
+    if (c.kind === 'canvas') c.elements = c.elements.map((e) => (e.type === 'text' ? { ...e, text: e.text.split(SABHA_TOKEN).join(sabhaName) } : e));
     return c;
   });
 }

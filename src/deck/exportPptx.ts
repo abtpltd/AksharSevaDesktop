@@ -2,7 +2,8 @@ import PptxGenJS from 'pptxgenjs';
 import { L, SLIDE_H, SLIDE_W } from '../core/layout';
 import type { Page } from '../core/pages';
 import { cardSizeFor } from '../core/posterText';
-import type { SlideStandard } from '../core/types';
+import type { CanvasElement, SlideStandard } from '../core/types';
+import { safeFont } from '../core/canvas';
 
 type Size = { w: number; h: number };
 export type SizeOf = (dataUrl: string) => Promise<Size>;
@@ -28,6 +29,24 @@ export function fitInside(s: Size, box: { x: number; y: number; w: number; h: nu
   return { x: box.x + (box.w - w) / 2, y: box.y + (box.h - h) / 2, w, h };
 }
 
+/** A box of a free slide as a PowerPoint object. Text uses a 4 pt margin, the same as the preview's padding. */
+async function addElement(pptx: PptxGenJS, s: PptxGenJS.Slide, e: CanvasElement, std: SlideStandard, sizeOf: SizeOf): Promise<void> {
+  const geom = { x: e.x, y: e.y, w: e.w, h: e.h, rotate: e.rot || undefined };
+  if (e.type === 'text') {
+    s.addText(e.text === '' ? ' ' : e.text, {
+      ...geom, fontFace: safeFont(e.font || std.fontFace), fontSize: e.size, bold: e.bold, italic: e.italic, underline: e.underline ? { style: 'sng' } : undefined, color: bare(e.color),
+      align: e.align, valign: e.valign, margin: 4, fill: e.fill ? { color: bare(e.fill) } : undefined, line: e.border && e.borderW > 0 ? { color: bare(e.border), width: e.borderW } : undefined,
+    });
+  } else if (e.type === 'image') {
+    const f = fitInside(await sizeOf(e.src), e);
+    s.addImage({ data: pptData(e.src), x: f.x, y: f.y, w: f.w, h: f.h, rotate: e.rot || undefined });
+  } else if (e.shape === 'line') {
+    s.addShape(pptx.ShapeType.line, { x: e.x, y: e.y + e.h / 2, w: e.w, h: 0, rotate: e.rot || undefined, line: { color: bare(e.line || '#000000'), width: Math.max(e.lineW, 0.5) } });
+  } else {
+    s.addShape(e.shape === 'ellipse' ? pptx.ShapeType.ellipse : pptx.ShapeType.rect, { ...geom, fill: e.fill ? { color: bare(e.fill) } : { type: 'none' }, line: e.line && e.lineW > 0 ? { color: bare(e.line), width: e.lineW } : { type: 'none' } });
+  }
+}
+
 /** Builds the deck from the same pages the preview shows. Returns the .pptx bytes. */
 export async function buildPptx(pages: Page[], std: SlideStandard, title: string, sizeOf: SizeOf = browserImageSize): Promise<Uint8Array> {
   const pptx = new PptxGenJS();
@@ -35,15 +54,16 @@ export async function buildPptx(pages: Page[], std: SlideStandard, title: string
   pptx.layout = 'WIDE';
   pptx.title = title;
   pptx.company = 'AksharSeva';
-  const font = std.fontFace;
+  const font = safeFont(std.fontFace);
   const sc = std.textScale || 1;
   const size = (n: number) => Math.max(8, Math.round(n * sc)); // body text only; the title keeps its size
 
   for (const p of pages) {
     const s = pptx.addSlide();
-    s.background = std.bgImage ? { data: pptData(std.bgImage) } : { color: bare(std.frameBg) };
-    if (std.frameStyle !== 'none') s.addShape(pptx.ShapeType.rect, { ...L.frameOuter, fill: { type: 'none' }, line: { color: bare(std.frameBorder), width: 3 } });
-    if (std.frameStyle === 'double') s.addShape(pptx.ShapeType.rect, { ...L.frameInner, fill: { type: 'none' }, line: { color: bare(std.frameBorder), width: 1 } });
+    s.background = p.kind === 'canvas' && p.bg ? { color: bare(p.bg) } : std.bgImage ? { data: pptData(std.bgImage) } : { color: bare(std.frameBg) };
+    const frameOn = !(p.kind === 'canvas' && p.chrome === 'none');
+    if (frameOn && std.frameStyle !== 'none') s.addShape(pptx.ShapeType.rect, { ...L.frameOuter, fill: { type: 'none' }, line: { color: bare(std.frameBorder), width: 3 } });
+    if (frameOn && std.frameStyle === 'double') s.addShape(pptx.ShapeType.rect, { ...L.frameInner, fill: { type: 'none' }, line: { color: bare(std.frameBorder), width: 1 } });
 
     const logo = async () => {
       if (std.logo) {
@@ -53,6 +73,17 @@ export async function buildPptx(pages: Page[], std: SlideStandard, title: string
         s.addShape(pptx.ShapeType.ellipse, { x: L.logo.x, y: L.logo.y + 0.1, w: 0.3, h: 0.3, fill: { color: 'B8412C' }, line: { color: 'B8412C', width: 0 } });
       }
     };
+
+    if (p.kind === 'canvas') {
+      if (p.chrome === 'full') {
+        if (p.label) s.addText(p.label, { ...L.label, fontFace: font, fontSize: L.label.size, bold: true, color: bare(std.labelColor), valign: 'middle', margin: 0 });
+        s.addText(std.titleText, { x: L.title.x, y: L.title.y, w: L.title.w, h: L.title.h, align: 'right', valign: 'middle', fontFace: font, fontSize: L.title.size, color: bare(std.titleColor), margin: 0 });
+        s.addShape(pptx.ShapeType.ellipse, { x: L.mark.x, y: L.mark.y, w: L.mark.d, h: L.mark.d, fill: { color: 'D9C27E' }, line: { color: 'D9C27E', width: 0 } });
+      }
+      if (p.chrome !== 'none') await logo();
+      for (const e of p.elements) await addElement(pptx, s, e, std, sizeOf);
+      continue;
+    }
 
     if (p.kind === 'opening' || p.kind === 'closing') {
       s.addText(p.kind === 'opening' ? std.openingText : std.closingText, {

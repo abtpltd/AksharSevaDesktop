@@ -41,7 +41,19 @@ export type DeckBlock =
   | { id: string; kind: 'list'; label: string; heading: string; lines: string[] }
   | { id: string; kind: 'table'; label: string; rows: [string, string][] }
   | { id: string; kind: 'poster'; label: string; heading: string; lines: string[]; image: string }
-  | { id: string; kind: 'prasad'; label: string };
+  | { id: string; kind: 'prasad'; label: string }
+  | CanvasBlock;
+
+/** A free-form slide: any number of text boxes, pictures and shapes placed anywhere (inches on a 13.333 x 7.5 slide). */
+export type Chrome = 'none' | 'frame' | 'full';
+export interface CanvasBlock { id: string; kind: 'canvas'; label: string; /** none = only the background; frame = the standard frame and logo; full = also the small title, the title and the gold mark. */ chrome: Chrome; /** Background colour of this slide, or empty to follow the slide standard. */ bg: string; elements: CanvasElement[] }
+export type Align = 'left' | 'center' | 'right';
+export type VAlign = 'top' | 'middle' | 'bottom';
+interface ElBase { id: string; x: number; y: number; w: number; h: number; /** degrees, clockwise */ rot: number }
+export interface TextEl extends ElBase { type: 'text'; text: string; /** empty = the standard's font */ font: string; size: number; bold: boolean; italic: boolean; underline: boolean; color: string; align: Align; valign: VAlign; /** background fill, empty = none */ fill: string; /** outline colour, empty = none */ border: string; borderW: number }
+export interface ImageEl extends ElBase { type: 'image'; src: string }
+export interface ShapeEl extends ElBase { type: 'shape'; shape: 'rect' | 'ellipse' | 'line'; fill: string; line: string; lineW: number }
+export type CanvasElement = TextEl | ImageEl | ShapeEl;
 
 export type DeckBlockKind = DeckBlock['kind'];
 

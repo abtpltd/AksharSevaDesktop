@@ -3,6 +3,8 @@ import { L, SLIDE_H, SLIDE_W } from '../core/layout';
 import type { Page } from '../core/pages';
 import { cardSizeFor } from '../core/posterText';
 import type { SlideStandard } from '../core/types';
+import CanvasView from './CanvasView';
+import { safeFont } from '../core/canvas';
 
 /** Inches to a percentage of the slide, so the preview scales to any width. */
 const px = (v: number) => `${(v / SLIDE_W) * 100}%`;
@@ -14,10 +16,11 @@ const hex = (c: string) => `#${c.replace('#', '')}`;
 const box = (x: number, y: number, w: number, h: number): CSSProperties => ({ position: 'absolute', left: px(x), top: py(y), width: px(w), height: py(h) });
 
 export default function SlidePreview({ page, std }: { page: Page | undefined; std: SlideStandard }) {
-  const font = `${std.fontFace}, Calibri, "Segoe UI", sans-serif`;
+  const font = `${safeFont(std.fontFace)}, Calibri, "Segoe UI", sans-serif`;
   const sc = std.textScale || 1; // body text only; the title and the small title keep their size
   const wrap: CSSProperties = { position: 'relative', width: '100%', aspectRatio: `${SLIDE_W} / ${SLIDE_H}`, background: std.bgImage ? `${hex(std.frameBg)} url(${std.bgImage}) center / cover no-repeat` : hex(std.frameBg), containerType: 'inline-size', fontFamily: font, overflow: 'hidden', borderRadius: 4 };
   if (!page) return <div style={wrap} />;
+  if (page.kind === 'canvas' && page.bg) wrap.background = hex(page.bg);
 
   const frame: ReactNode = (
     <>
@@ -28,6 +31,11 @@ export default function SlidePreview({ page, std }: { page: Page | undefined; st
   const logo = std.logo
     ? <img alt="" src={std.logo} style={{ ...box(L.logo.x, L.logo.y, L.logo.w, L.logo.h), objectFit: 'contain' }} />
     : <div style={{ ...box(L.logo.x, L.logo.y, L.logo.w * 0.5, L.logo.w * 0.5), background: '#B8412C', borderRadius: '50%' }} />;
+
+  if (page.kind === 'canvas') {
+    if (page.chrome === 'none') return <div style={wrap}><CanvasView elements={page.elements} std={std} /></div>;
+    if (page.chrome === 'frame') return <div style={wrap}>{frame}<CanvasView elements={page.elements} std={std} />{logo}</div>;
+  }
 
   if (page.kind === 'opening' || page.kind === 'closing') {
     return (
@@ -52,6 +60,7 @@ export default function SlidePreview({ page, std }: { page: Page | undefined; st
   );
   const body: CSSProperties = { ...box(L.body.x, L.body.y, L.body.w, L.body.h), color: hex(std.bodyColor), fontWeight: 700, overflow: 'hidden' };
 
+  if (page.kind === 'canvas') return <div style={wrap}>{chrome}<CanvasView elements={page.elements} std={std} /></div>;
   if (page.kind === 'text') {
     return (
       <div style={wrap}>{chrome}

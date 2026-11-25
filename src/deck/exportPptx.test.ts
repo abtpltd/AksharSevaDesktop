@@ -5,6 +5,7 @@ import { buildPages } from '../core/pages';
 import { defaultStandard } from '../core/defaults';
 import type { DeckBlock, Donor } from '../core/types';
 import { buildPptx, fitInside } from './exportPptx';
+import { blankCanvas, newImage, newShape, newText } from '../core/canvas';
 
 const donors: Donor[] = ['Ramesh K. Patel', 'Nilesh M. Shah', 'Dipak R. Mehta', 'Sample Four'].map((n, i) => ({ id: `d${i}`, name: n, occasion: 'On occasion of a birthday' }));
 const deck: DeckBlock[] = [
@@ -50,5 +51,47 @@ describe('powerpoint export', () => {
   it('fits an image inside a box without stretching', () => {
     const f = fitInside({ w: 200, h: 100 }, { x: 0, y: 0, w: 4, h: 4 });
     expect(f).toEqual({ x: 0, y: 1, w: 4, h: 2 });
+  });
+
+  it('a free slide is exported box by box with its fonts, colours, turn and background', async () => {
+    const std = defaultStandard();
+    const b = blankCanvas('Sabha'); b.bg = '#112233'; b.chrome = 'none';
+    b.elements = [
+      newText({ text: 'Jai Swaminarayan', font: 'Georgia', size: 44, bold: true, italic: true, underline: true, color: '#AA5900', align: 'center', valign: 'middle', fill: '#F4F1EA', border: '#222222', borderW: 2, rot: 15 }),
+      newShape('ellipse', { fill: '#CC2B00' }), newShape('rect'), newShape('line', { line: '#000000', lineW: 4 }),
+      newImage('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', { w: 2, h: 1 }),
+    ];
+    const bytes = await buildPptx(buildPages([b], [], std), std, 't', async () => ({ w: 2, h: 1 }));
+    const zip = await JSZip.loadAsync(bytes);
+    const xml = await zip.file('ppt/slides/slide1.xml')!.async('string');
+    expect(xml).toContain('Jai Swaminarayan');
+    expect(xml).toContain('typeface="Georgia"');
+    expect(xml).toContain('sz="4400"');
+    expect(xml).toContain('b="1"'); expect(xml).toContain('i="1"'); expect(xml).toContain('u="sng"');
+    expect(xml).toContain('AA5900'); expect(xml).toContain('F4F1EA');
+    expect(xml).toContain('rot="900000"'); // 15 degrees
+    expect(xml).toContain('algn="ctr"'); expect(xml).toContain('anchor="ctr"');
+    expect(xml).toContain('prst="ellipse"'); expect(xml).toContain('prst="rect"'); expect(xml).toContain('prst="line"');
+    expect(xml).toContain('CC2B00');
+    expect(xml).toContain('<p:pic>');
+    expect(xml).not.toContain('ANNOUNCEMENT'); // chrome none: no standard title
+    expect(await zip.file('ppt/slides/slide1.xml')!.async('string')).toContain('112233'); // the slide's own background
+  });
+  it('a free slide with the full chrome carries the standard title and small title; frame-only carries neither', async () => {
+    const std = defaultStandard();
+    const full = { ...blankCanvas('Ravi Sabha'), elements: [] }, frame = { ...blankCanvas('Ravi Sabha'), chrome: 'frame' as const, elements: [] };
+    const bytes = await buildPptx(buildPages([full, frame], [], std), std, 't', async () => ({ w: 1, h: 1 }));
+    const zip = await JSZip.loadAsync(bytes);
+    const a = await zip.file('ppt/slides/slide1.xml')!.async('string'), b = await zip.file('ppt/slides/slide2.xml')!.async('string');
+    expect(a).toContain('ANNOUNCEMENT'); expect(a).toContain('Ravi Sabha');
+    expect(b).not.toContain('ANNOUNCEMENT'); expect(b).not.toContain('Ravi Sabha');
+  });
+
+  it('a font name from the server never reaches the file in a form that could break it', async () => {
+    const std = { ...defaultStandard(), fontFace: 'Arial"/><y' };
+    const b = blankCanvas(''); b.elements = [{ ...newText({ text: 'Hello' }), font: 'Arial"/><x' } as never];
+    const bytes = await buildPptx(buildPages([b], [], std), std, 't', async () => ({ w: 1, h: 1 }));
+    const xml = await (await JSZip.loadAsync(bytes)).file('ppt/slides/slide1.xml')!.async('string');
+    expect(xml).not.toContain('<x'); expect(xml).not.toContain('<y'); expect(xml).toContain('typeface="Calibri"');
   });
 });

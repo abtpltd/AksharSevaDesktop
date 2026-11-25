@@ -1,4 +1,5 @@
 import { isPictureData } from '../core/library';
+import { validCanvas } from '../core/canvas';
 import type { Kind } from './records';
 
 /**
@@ -25,6 +26,7 @@ export const validBlock = (x: unknown): boolean => {
     case 'text': case 'list': return str(x.label) && str(x.heading) && strs(x.lines);
     case 'poster': return str(x.label) && str(x.heading) && strs(x.lines) && str(x.image);
     case 'table': return str(x.label) && list(x.rows, (r) => Array.isArray(r) && r.length === 2 && str(r[0]) && str(r[1]));
+    case 'canvas': return validCanvas(x);
     default: return false;
   }
 };
