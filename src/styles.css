@@ -1,0 +1,16 @@
+html, body, #root { height: 100%; margin: 0; }
+body { background: #f3f6fa; font-family: Inter, "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+.page { padding: 20px 24px 40px; max-width: 1280px; margin: 0 auto; }
+.muted { color: #627081; font-size: 13px; }
+.card-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #e4eaf1; border-radius: 10px; background: #fff; margin-bottom: 8px; }
+.card-row.active { border-color: #1370b6; background: #f1f7fc; }
+.card-row .grow { flex: 1; min-width: 0; }
+.card-row .grow b { display: block; }
+.card-row .grow span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prog-row { display: grid; grid-template-columns: 120px minmax(160px, 2fr) 100px minmax(120px, 1.4fr) 80px minmax(120px, 1.4fr) 108px; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid #edf1f6; }
+.prog-head { color: #627081; font-size: 12px; border-top: 0; }
+.prog-time { font-variant-numeric: tabular-nums; color: #14202e; font-size: 13px; }
+.slide-strip { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0 2px; }
+.slide-strip button { flex: none; width: 112px; padding: 0; border: 2px solid transparent; border-radius: 6px; background: none; cursor: pointer; }
+.slide-strip button.on { border-color: #1370b6; }
+@media print { .no-print { display: none !important; } }

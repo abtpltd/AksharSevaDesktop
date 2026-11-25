@@ -1,0 +1,222 @@
+import { useEffect, useMemo, useState } from 'react';
+import { App, AutoComplete, Button, Dropdown, Input, Modal, Select, Space, Switch, Tooltip } from 'antd';
+import { HistoryOutlined, SaveOutlined, ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, LeftOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons';
+import { actions, pastDonors, useAppState, useStandard } from '../data/store';
+import type { DeckBlock, DeckBlockKind, Meeting } from '../core/types';
+import { buildPages, slidesOfBlock } from '../core/pages';
+import { uid } from '../core/defaults';
+import SlidePreview from '../deck/SlidePreview';
+import { go } from '../ui/router';
+import { addTicker, removeTicker, useTicker } from '../data/ticker';
+import { useScreen } from '../data/screen';
+import { downloadPptx } from '../deck/exportPptx';
+import BlockEditor, { KIND_NAME, blankBlock, summary } from './BlockEditor';
+
+export default function AnnouncementsTab({ meeting: m, sabhaName }: { meeting: Meeting; sabhaName: string }) {
+  const { message } = App.useApp();
+  const s = useAppState();
+  const std = useStandard();
+  const pages = useMemo(() => buildPages(m.deck, m.donors, std), [m.deck, m.donors, std]);
+  const [cursor, setCursor] = useState(0);
+  const [editing, setEditing] = useState<{ block: DeckBlock; isNew: boolean } | null>(null);
+  const [dn, setDn] = useState('');
+  const [dOcc, setDOcc] = useState('');
+  const [dErr, setDErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [tplName, setTplName] = useState<string | null>(null);
+  const tk = useTicker(m.id);
+  const scr = useScreen(m.id);
+  const addMsg = () => {
+    const text = tkText;
+    addTicker(m.id, text, tk.msgs).then(() => { setTkText(''); tk.reload(); }).catch((e: Error) => message.error(`The message was not saved: ${e.message || 'no connection'}`));
+  };
+  const [tkText, setTkText] = useState('');
+  const suggestions = useMemo(() => pastDonors(s), [s]);
+
+  useEffect(() => { if (cursor > pages.length - 1) setCursor(Math.max(0, pages.length - 1)); }, [pages.length, cursor]);
+
+  const setDeck = (deck: DeckBlock[], note?: string) => actions.setDeck(m.id, deck, note);
+  const [showHistory, setShowHistory] = useState(false);
+  const removeBlock = (b: DeckBlock) => {
+    setDeck(m.deck.filter((x) => x.id !== b.id), `Removed "${summary(b, m.donors.length)}"`);
+    const key = `undo-${b.id}`;
+    message.open({ key, type: 'info', duration: 8, content: (<span>Slide removed. <a onClick={() => { actions.undoDeck(m.id); message.destroy(key); }}>Undo</a></span>) });
+  };
+  const move = (i: number, d: -1 | 1) => {
+    const j = i + d;
+    if (j < 0 || j >= m.deck.length) return;
+    const next = [...m.deck];
+    [next[i], next[j]] = [next[j], next[i]];
+    setDeck(next, 'Moved a slide');
+  };
+  const showBlock = (id: string) => { const n = slidesOfBlock(pages, id)[0]; if (n) setCursor(n - 1); };
+  const hasPrasad = m.deck.some((b) => b.kind === 'prasad');
+
+  const addDonor = () => {
+    const name = dn.trim();
+    if (!name) { setDErr('Enter the donor name first'); return; }
+    actions.setDonors(m.id, [...m.donors, { id: uid(), name, occasion: dOcc.trim() }]);
+    setDn(''); setDOcc(''); setDErr('');
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    const pb = m.deck.find((b) => b.kind === 'prasad');
+    if (pb) setTimeout(() => { const ns = slidesOfBlock(buildPages(m.deck, [...m.donors, { id: 'x', name, occasion: '' }], std), pb.id); if (ns.length) setCursor(ns[ns.length - 1] - 1); }, 0);
+  };
+  const patchDonor = (id: string, p: { name?: string; occasion?: string }) => actions.setDonors(m.id, m.donors.map((d) => (d.id === id ? { ...d, ...p } : d)));
+  const moveDonor = (i: number, d: -1 | 1) => {
+    const j = i + d;
+    if (j < 0 || j >= m.donors.length) return;
+    const next = [...m.donors];
+    [next[i], next[j]] = [next[j], next[i]];
+    actions.setDonors(m.id, next);
+  };
+
+  const exportDeck = async () => {
+    if (!pages.length) { message.warning('There are no slides to export yet.'); return; }
+    setBusy(true);
+    try { await downloadPptx(pages, std, `${sabhaName} announcements ${m.date}`, `${sabhaName} announcements ${m.date}`); message.success('PowerPoint downloaded'); }
+    catch (e) { message.error(`Could not make the PowerPoint: ${e instanceof Error ? e.message : 'unknown problem'}`); }
+    finally { setBusy(false); }
+  };
+
+  const addItems = (['text', 'list', 'table', 'poster'] as DeckBlockKind[]).map((k) => ({ key: k, label: KIND_NAME[k] }));
+  if (!hasPrasad) addItems.push({ key: 'prasad', label: KIND_NAME.prasad });
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 400px) minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
+      <div>
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>Deck, in order</div>
+        {m.deck.map((b, i) => {
+          const on = slidesOfBlock(pages, b.id).includes(cursor + 1);
+          const slides = slidesOfBlock(pages, b.id);
+          return (
+            <div key={b.id} className={`card-row${on ? ' active' : ''}`}>
+              <div className="grow" role="button" tabIndex={0} onClick={() => showBlock(b.id)} onKeyDown={(e) => { if (e.key === 'Enter') showBlock(b.id); }} style={{ cursor: 'pointer' }}>
+                <b style={{ fontWeight: 500 }}>{summary(b, m.donors.length)}</b>
+                <span className="muted">{KIND_NAME[b.kind]}{slides.length ? `, slide${slides.length > 1 ? 's' : ''} ${slides[0]}${slides.length > 1 ? ` to ${slides[slides.length - 1]}` : ''}` : ', no slide yet'}</span>
+              </div>
+              <Space size={2}>
+                <Tooltip title="Move up"><Button size="small" icon={<ArrowUpOutlined />} disabled={i === 0} onClick={() => move(i, -1)} /></Tooltip>
+                <Tooltip title="Move down"><Button size="small" icon={<ArrowDownOutlined />} disabled={i === m.deck.length - 1} onClick={() => move(i, 1)} /></Tooltip>
+                {b.kind !== 'opening' && b.kind !== 'closing' && <Tooltip title="Edit"><Button size="small" icon={<EditOutlined />} onClick={() => setEditing({ block: b, isNew: false })} /></Tooltip>}
+                <Tooltip title="Remove"><Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeBlock(b)} /></Tooltip>
+              </Space>
+            </div>
+          );
+        })}
+        <Dropdown menu={{ items: addItems, onClick: ({ key }) => { const k = key as DeckBlockKind; const b = blankBlock(k, sabhaName); if (k === 'prasad') { const closing = m.deck.findIndex((x) => x.kind === 'closing'); const next = [...m.deck]; next.splice(closing < 0 ? next.length : closing, 0, b); setDeck(next, `Added "${summary(b, m.donors.length)}"`); } else setEditing({ block: b, isNew: true }); } }} trigger={['click']}>
+          <Button icon={<PlusOutlined />}>Add announcement</Button>
+        </Dropdown>
+        <Button style={{ marginLeft: 8 }} icon={<SaveOutlined />} onClick={() => setTplName('')}>Save as template</Button>
+        <Button style={{ marginLeft: 8 }} icon={<HistoryOutlined />} onClick={() => setShowHistory(true)} disabled={!(m.history ?? []).length}>History</Button>
+
+        {hasPrasad && (
+          <div style={{ marginTop: 20 }}>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Prasad sponsors ({m.donors.length})</div>
+            <AutoComplete
+              style={{ width: '100%' }} value={dn} options={suggestions.map((d) => ({ value: d.name, label: d.occasion ? `${d.name} (${d.occasion})` : d.name }))}
+              filterOption={(input, o) => (o?.value ?? '').toString().toLowerCase().includes(input.toLowerCase())}
+              onChange={(v) => { setDn(v); setDErr(''); }}
+              onSelect={(v) => { const hit = suggestions.find((d) => d.name === v); if (hit && !dOcc) setDOcc(hit.occasion); }}
+              placeholder="Donor name"
+            />
+            <Input style={{ marginTop: 6 }} value={dOcc} onChange={(e) => setDOcc(e.target.value)} placeholder="On occasion of" onPressEnter={addDonor} />
+            {dErr ? <div style={{ color: '#d64545', fontSize: 12, marginTop: 4 }}>{dErr}</div> : null}
+            <Button type="primary" style={{ marginTop: 8 }} onClick={addDonor} block>Add to slides</Button>
+            <div style={{ marginTop: 10 }}>
+              {m.donors.map((d, i) => (
+                <div key={d.id} style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 6 }}>
+                  <span className="muted" style={{ width: 18 }}>{i + 1}.</span>
+                  <Input size="small" value={d.name} onChange={(e) => patchDonor(d.id, { name: e.target.value })} aria-label="Donor name" />
+                  <Input size="small" value={d.occasion} onChange={(e) => patchDonor(d.id, { occasion: e.target.value })} aria-label="Occasion" />
+                  <Button size="small" icon={<ArrowUpOutlined />} disabled={i === 0} onClick={() => moveDonor(i, -1)} aria-label="Move up" />
+                  <Button size="small" icon={<ArrowDownOutlined />} disabled={i === m.donors.length - 1} onClick={() => moveDonor(i, 1)} aria-label="Move down" />
+                  <Button size="small" danger icon={<DeleteOutlined />} onClick={() => actions.setDonors(m.id, m.donors.filter((x) => x.id !== d.id))} aria-label="Remove donor" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <SlidePreview page={pages[cursor]} std={std} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0' }}>
+          <Button icon={<LeftOutlined />} disabled={cursor <= 0} onClick={() => setCursor(cursor - 1)} aria-label="Previous slide" />
+          <span className="muted">{pages.length ? `Slide ${cursor + 1} of ${pages.length}` : 'No slides yet'}</span>
+          <Button icon={<RightOutlined />} disabled={cursor >= pages.length - 1} onClick={() => setCursor(cursor + 1)} aria-label="Next slide" />
+          <span style={{ flex: 1 }} />
+          <Button type="primary" icon={<DownloadOutlined />} loading={busy} onClick={exportDeck}>Export PowerPoint</Button>
+          <Button style={{ marginLeft: 8 }} onClick={() => { go(`/present/${m.id}`); void document.documentElement.requestFullscreen?.().catch(() => {}); }}>Present on this screen</Button>
+          <Button style={{ marginLeft: 8 }} onClick={() => go(`/presenter/${m.id}`)}>Presenter view</Button>
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Scroller at the bottom of the screen</div>
+            <Space wrap style={{ marginBottom: 8 }}>
+              <Switch checked={scr.settings.tickerOn} onChange={(v) => void scr.change({ tickerOn: v })} /> <span>On</span>
+              <span>Speed</span>
+              <Select size="small" style={{ width: 90 }} value={scr.settings.tickerSpeed} onChange={(v) => void scr.change({ tickerSpeed: v })} options={[1, 2, 3, 4, 5].map((n) => ({ value: n, label: n === 1 ? '1 slow' : n === 5 ? '5 fast' : String(n) }))} />
+              <Switch checked={scr.settings.autoDonors} onChange={(v) => void scr.change({ autoDonors: v })} /> <span>Donor list scrolls by itself, a name every</span>
+              <Select size="small" style={{ width: 80 }} value={scr.settings.autoSpeed} onChange={(v) => void scr.change({ autoSpeed: v })} options={[2, 3, 4, 6, 8, 12].map((n) => ({ value: n, label: `${n} s` }))} />
+            </Space>
+            {tk.msgs.map((x) => (
+              <div key={x.id} style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+                <span style={{ flex: 1 }}>{x.text}</span>
+                <Button size="small" danger icon={<DeleteOutlined />} aria-label="Remove message" onClick={() => removeTicker(x.id).then(tk.reload).catch((e: Error) => message.error(`Could not remove it: ${e.message || 'no connection'}`))} />
+              </div>
+            ))}
+            <Space.Compact style={{ width: '100%' }}>
+              <Input value={tkText} maxLength={200} placeholder="A message for the scroller" onChange={(e) => setTkText(e.target.value)} onPressEnter={addMsg} />
+              <Button onClick={addMsg}>Add</Button>
+            </Space.Compact>
+          </div>
+        </div>
+        <div className="slide-strip">
+          {pages.map((p, i) => (
+            <button key={i} className={i === cursor ? 'on' : ''} onClick={() => setCursor(i)} aria-label={`Show slide ${i + 1}`}>
+              <SlidePreview page={p} std={std} />
+            </button>
+          ))}
+        </div>
+        <p className="muted" style={{ marginTop: 6 }}>Long lists continue on the next slide by themselves. Frame, colours, fonts and logo come from the slide standard.</p>
+      </div>
+
+      <Modal
+        open={tplName !== null} title="Save this deck as a template" okText="Save template" destroyOnHidden
+        onCancel={() => setTplName(null)}
+        onOk={() => {
+          const id = actions.saveDeckAsTemplate(m.id, tplName ?? '');
+          if (!id) { message.error('Give the template a name that is not already used at this center.'); return; }
+          setTplName(null);
+          message.success('Template saved. Pick it when you start a new meeting.');
+        }}
+      >
+        <p className="muted">The slides and their wording are kept. Poster pictures and donor names are not, because they belong to this meeting.</p>
+        <Input value={tplName ?? ''} onChange={(e) => setTplName(e.target.value)} placeholder="For example: Diwali event announcements" aria-label="Template name" onPressEnter={(e) => e.preventDefault()} />
+      </Modal>
+
+      <Modal open={showHistory} title="Earlier versions of these slides" footer={null} onCancel={() => setShowHistory(false)}>
+        <p className="muted">Going back never loses anything: the slides as they are now are kept here too.</p>
+        {(m.history ?? []).map((h, i) => (
+          <div key={`${h.at}-${i}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #eee' }}>
+            <div>
+              <div>{h.note}</div>
+              <div className="muted">{new Date(h.at).toLocaleString()} · {h.deck.length} slides</div>
+            </div>
+            <Button size="small" onClick={() => { actions.restoreDeck(m.id, i); setShowHistory(false); message.success('Slides brought back'); }}>Go back to this</Button>
+          </div>
+        ))}
+      </Modal>
+
+      {editing && (
+        <BlockEditor
+          key={editing.block.id} block={editing.block} onCancel={() => setEditing(null)}
+          onSave={(b) => {
+            const next = editing.isNew ? (() => { const closing = m.deck.findIndex((x) => x.kind === 'closing'); const arr = [...m.deck]; arr.splice(closing < 0 ? arr.length : closing, 0, b); return arr; })() : m.deck.map((x) => (x.id === b.id ? b : x));
+            setDeck(next, editing.isNew ? `Added "${summary(b, m.donors.length)}"` : `Edited "${summary(b, m.donors.length)}"`);
+            setEditing(null);
+            setTimeout(() => showBlock(b.id), 0);
+          }}
+        />
+      )}
+    </div>
+  );
+}
