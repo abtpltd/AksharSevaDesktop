@@ -13,6 +13,8 @@ export interface Sabha {
   usualPattern: string;
   defaultVenue: string;
   defaultStart: string; // HH:mm
+  /** The usual weekday of a weekly sabha, 0 = Sunday. Missing means Sunday (how the first sabhas were made). */
+  day?: number;
   defaultMinutes: number;
 }
 

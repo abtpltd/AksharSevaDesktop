@@ -4,6 +4,7 @@ import { effective } from '../core/cascade';
 import { DEFAULT_WORKING_ORG, defaultSabhas, templateFor, uid } from '../core/defaults';
 import { DEFAULT_TEMPLATE_ID, DEFAULT_TEMPLATE_NAME, defaultTemplateBlocks, fillTemplate, stripForTemplate, visibleTemplates } from '../core/templates';
 import { levelsFor } from './records';
+import { MAX_SABHAS, sabhaFrom, sabhaProblem, type SabhaInput } from '../core/sabhaForm';
 import { contactProblem, MAX_CONTACTS, refreshDonor } from '../core/donors';
 import { isPictureData, MAX_POSTER_NAME, MAX_POSTERS } from '../core/library';
 import type { AppState, DeckBlock, Donor, DonorContact, DonorKind, Level, Meeting, ProgramItem, Sabha, SlideStandard, SlideTemplate, StandardKey } from '../core/types';
@@ -84,6 +85,25 @@ export const actions = {
   saveSabha(s: Sabha): void {
     const exists = state.sabhas.some((x) => x.id === s.id);
     commit({ ...state, sabhas: exists ? state.sabhas.map((x) => (x.id === s.id ? s : x)) : [...state.sabhas, s] });
+  },
+  /** Makes a new sabha for the working center. Says why when it cannot. */
+  addSabha(i: SabhaInput): { ok: true; sabha: Sabha } | { ok: false; error: string } {
+    const bad = sabhaProblem(i, state.sabhas);
+    if (bad) return { ok: false, error: bad };
+    if (state.sabhas.length >= MAX_SABHAS) return { ok: false, error: `Up to ${MAX_SABHAS} sabhas can be kept` };
+    const sabha = sabhaFrom(uid(), i);
+    commit({ ...state, sabhas: [...state.sabhas, sabha] });
+    return { ok: true, sabha };
+  },
+  /** Changes how a sabha is run. Meetings already made keep their own date, time and venue. */
+  updateSabha(id: string, i: SabhaInput): { ok: true } | { ok: false; error: string } {
+    const cur = state.sabhas.find((x) => x.id === id);
+    if (!cur) return { ok: false, error: 'This sabha cannot be changed here' };
+    const bad = sabhaProblem(i, state.sabhas.filter((x) => x.id !== id));
+    if (bad) return { ok: false, error: bad };
+    const next = sabhaFrom(id, i, cur.builtin);
+    commit({ ...state, sabhas: state.sabhas.map((x) => (x.id === id ? next : x)) });
+    return { ok: true };
   },
   createMeeting(sabha: Sabha, date: string, start: string, venue: string, copyFrom?: Meeting, templateId: string = DEFAULT_TEMPLATE_ID): Meeting {
     const m: Meeting = copyFrom

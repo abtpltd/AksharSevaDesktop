@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Button, Card, Checkbox, DatePicker, Empty, Form, Input, Modal, Popconfirm, Select, Space, Tag, TimePicker, Typography } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Checkbox, DatePicker, Empty, Form, Input, InputNumber, Modal, Popconfirm, Radio, Select, Space, Tag, TimePicker, Typography } from 'antd';
+import { EditOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { actions, useAppState } from '../data/store';
 import type { Sabha } from '../core/types';
@@ -9,12 +9,14 @@ import { go } from '../ui/router';
 import { DEFAULT_TEMPLATE_ID, DEFAULT_TEMPLATE_NAME, visibleTemplates } from '../core/templates';
 import { suggestedDates } from '../core/sabhaDates';
 import { comingAtAGlance } from '../core/glance';
+import { DAYS, inputOf, usualText, type SabhaInput } from '../core/sabhaForm';
 
-const KIND_LABEL = { weekly: 'Usual weekly slot', flexible: 'Lead chooses each time', event: 'Raised when needed' } as const;
+const KIND_LABEL = { weekly: 'Fixed time', flexible: 'Variable time', event: 'Event' } as const;
 
 export default function HomePage() {
   const s = useAppState();
   const [target, setTarget] = useState<Sabha | null>(null);
+  const [editing, setEditing] = useState<{ sabha?: Sabha } | null>(null);
   const sabhaName = (id: string) => s.sabhas.find((x) => x.id === id)?.name ?? 'Sabha';
   const glance = useMemo(() => comingAtAGlance(s.sabhas, s.meetings, dayjs().format('YYYY-MM-DD')), [s.sabhas, s.meetings]);
   const upcomingFirst = useMemo(() => [...s.meetings].sort((a, b) => b.date.localeCompare(a.date) || b.start.localeCompare(a.start)), [s.meetings]);
@@ -37,12 +39,16 @@ export default function HomePage() {
         </>
       )}
       <Typography.Title level={3} style={{ marginTop: 0 }}>Sabhas and meetings</Typography.Title>
-      <p className="muted">Each sabha keeps its own pattern, but every meeting stands on its own: its own date, time, venue, program and announcements.</p>
+      <p className="muted">Each sabha has a usual time: fixed (the same day and time every week), variable (chosen for each meeting) or an event raised when needed. Every meeting still stands on its own, so any one can start at a different time.</p>
+      <Button icon={<PlusOutlined />} style={{ marginBottom: 12 }} onClick={() => setEditing({})}>New sabha</Button>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
         {s.sabhas.map((sb) => (
           <Card key={sb.id} size="small" title={sb.name} extra={<Tag>{KIND_LABEL[sb.kind]}</Tag>}>
             <div className="muted" style={{ minHeight: 40 }}>{sb.usualPattern}</div>
-            <Button type="primary" icon={<PlusOutlined />} style={{ marginTop: 8 }} onClick={() => setTarget(sb)}>New meeting</Button>
+            <Space style={{ marginTop: 8 }}>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setTarget(sb)}>New meeting</Button>
+              <Button icon={<EditOutlined />} onClick={() => setEditing({ sabha: sb })} aria-label={`Change ${sb.name}`}>Change</Button>
+            </Space>
           </Card>
         ))}
       </div>
@@ -65,6 +71,7 @@ export default function HomePage() {
         </div>
       ))}
 
+      {editing && <SabhaForm key={editing.sabha?.id ?? 'new'} sabha={editing.sabha} onClose={() => setEditing(null)} />}
       {target && <NewMeeting key={target.id} sabha={target} onClose={() => setTarget(null)} />}
     </>
   );
@@ -102,7 +109,7 @@ export function NewMeeting({ sabha, onClose, date: firstDate }: { sabha: Sabha; 
           )}
           <DatePicker value={date} onChange={(d) => { setDate(d); setError(''); }} format="DD-MM-YYYY" style={{ width: '100%' }} allowClear={false} />
         </Form.Item>
-        <Form.Item label="Start time">
+        <Form.Item label="Start time" extra={sabha.kind === 'flexible' ? 'This sabha has no fixed time: choose it for this meeting.' : start && start.format('HH:mm') !== sabha.defaultStart ? `The usual time is ${clock12(sabha.defaultStart)}. Only this meeting starts at a different time.` : undefined}>
           <TimePicker value={start} onChange={(t) => { setStart(t); setError(''); }} format="HH:mm" minuteStep={5} style={{ width: '100%' }} allowClear={false} needConfirm={false} />
         </Form.Item>
         <Form.Item label="Venue"><Input value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="Where it will be held" /></Form.Item>
@@ -125,3 +132,45 @@ export function NewMeeting({ sabha, onClose, date: firstDate }: { sabha: Sabha; 
   );
 }
 
+
+/** Makes a new sabha, or changes how an existing one is run: fixed weekly time, variable time, or an event. */
+export function SabhaForm({ sabha, onClose }: { sabha?: Sabha; onClose: () => void }) {
+  const [v, setV] = useState<SabhaInput>(sabha ? inputOf(sabha) : { name: '', kind: 'weekly', day: 0, start: '17:00', venue: '', minutes: 120 });
+  const [error, setError] = useState('');
+  const set = (p: Partial<SabhaInput>) => { setV((x) => ({ ...x, ...p })); setError(''); };
+  const save = () => {
+    const r = sabha ? actions.updateSabha(sabha.id, v) : actions.addSabha(v);
+    if (!r.ok) { setError(r.error); return; }
+    onClose();
+  };
+  return (
+    <Modal open title={sabha ? `Change ${sabha.name}` : 'New sabha'} okText="Save" onOk={save} onCancel={onClose} destroyOnHidden>
+      <Form layout="vertical" onFinish={save}>
+        <Form.Item label="Name" validateStatus={error && !v.name.trim() ? 'error' : undefined}>
+          <Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} onPressEnter={save} placeholder="For example Ravi Sabha" />
+        </Form.Item>
+        <Form.Item label="Timing">
+          <Radio.Group value={v.kind} onChange={(e) => set({ kind: e.target.value })} optionType="button"
+            options={[{ value: 'weekly', label: 'Fixed' }, { value: 'flexible', label: 'Variable' }, { value: 'event', label: 'Event' }]} />
+          <div className="muted" style={{ marginTop: 6 }}>
+            {v.kind === 'weekly' ? 'The same day and time every week. The Calendar suggests these dates, and any one meeting can still start at another time.'
+              : v.kind === 'flexible' ? 'No usual slot. The time is chosen for each meeting.'
+              : 'Held only when needed. It has a usual time, but no weekly dates.'}
+          </div>
+        </Form.Item>
+        {v.kind === 'weekly' && (
+          <Form.Item label="Day"><Select value={v.day} onChange={(d) => set({ day: d })} options={DAYS.map((d, i) => ({ value: i, label: d }))} /></Form.Item>
+        )}
+        <Form.Item label={v.kind === 'flexible' ? 'Start time offered first' : 'Usual start time'}>
+          <TimePicker value={dayjs(`2000-01-01T${v.start}`)} onChange={(t) => t && set({ start: t.format('HH:mm') })} format="HH:mm" minuteStep={5} style={{ width: '100%' }} allowClear={false} needConfirm={false} />
+        </Form.Item>
+        <Space size="large" align="start">
+          <Form.Item label="Usual length (minutes)"><InputNumber min={5} max={600} step={5} value={v.minutes} onChange={(m) => set({ minutes: m ?? 0 })} /></Form.Item>
+          <Form.Item label="Usual venue"><Input value={v.venue} onChange={(e) => set({ venue: e.target.value })} placeholder="Optional" /></Form.Item>
+        </Space>
+        <div className="muted">Shown on the sabha card: <b>{usualText(v)}</b></div>
+        {error && <Alert type="error" showIcon message={error} style={{ marginTop: 12 }} />}
+      </Form>
+    </Modal>
+  );
+}

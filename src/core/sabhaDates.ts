@@ -1,13 +1,13 @@
-import { occurrences, type Rhythm } from './rhythm';
+import { occurrences, type Rhythm, type Weekday } from './rhythm';
 import type { Meeting, Sabha } from './types';
 
 /**
- * The weekly rhythm of a sabha with a usual slot: every Sunday (D54 engine). Sabhas whose lead chooses each time, or that are raised when
+ * The weekly rhythm of a sabha with a usual slot: every week on its chosen day, Sunday unless set (D54 engine). Sabhas whose lead chooses each time, or that are raised when
  * needed, have no rhythm and give no suggestions. A cancelled or moved Sunday is not stored yet: the person simply picks another date.
  */
 export function usualRhythm(sabha: Sabha, start: string): Rhythm | null {
   if (sabha.kind !== 'weekly') return null;
-  return { start, rules: [{ kind: 'weekdays', days: [0], time: sabha.defaultStart }] };
+  return { start, rules: [{ kind: 'weekdays', days: [(Number.isInteger(sabha.day) && sabha.day! >= 0 && sabha.day! <= 6 ? sabha.day : 0) as Weekday], time: sabha.defaultStart }] };
 }
 
 const addDays = (iso: string, n: number): string => {

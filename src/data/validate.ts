@@ -34,6 +34,7 @@ export const validBlock = (x: unknown): boolean => {
 
 export const validSabha = (b: unknown): boolean =>
   isObj(b) && str(b.id) && str(b.name) && SABHA_KINDS.has(b.kind as string) && str(b.usualPattern) && str(b.defaultVenue) && /^\d{2}:\d{2}$/.test(String(b.defaultStart)) && num(b.defaultMinutes) &&
+  (b.day === undefined || (Number.isInteger(b.day) && (b.day as number) >= 0 && (b.day as number) <= 6)) &&
   (b.builtin === undefined || BUILTIN.has(b.builtin as string));
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/, TIME = /^\d{2}:\d{2}$/;
