@@ -12,11 +12,13 @@ import TemplatesPage from './pages/TemplatesPage';
 import PresenterPage from './pages/PresenterPage';
 import PresentPage from './pages/PresentPage';
 import ErrorBoundary from './ui/ErrorBoundary';
+import { useNewVersion } from './ui/newVersion';
 
 export default function App() {
   const route = useRoute();
   const conn = useConnection();
   const lv = useLive();
+  const fresh = useNewVersion();
   // everything is read from and saved on the server (D59): nothing can be shown until this computer is connected and has read it
   const ready = conn.status === 'connected' && lv.loaded;
   const meetingId = route.startsWith('/meeting/') ? route.slice('/meeting/'.length) : '';
@@ -45,6 +47,7 @@ export default function App() {
             />
           </Layout.Sider>
           <Layout.Content>
+            {fresh && <Alert banner type="info" showIcon message="A new version of AksharSeva is ready." action={<Button size="small" type="primary" onClick={() => window.location.reload()}>Reload</Button>} />}
             {conn.status === 'connected' && lv.problem && <Alert banner type="error" showIcon message={lv.problem} action={<Button size="small" onClick={() => void live.refreshNow()}>Try again</Button>} />}
             {lv.notices.length > 0 && (
               <Alert banner type="warning" showIcon closable={false}
