@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { App, Button, Dropdown, Input, Modal, Popconfirm, Space, Tag, Tooltip, Typography } from 'antd';
-import { ArrowDownOutlined, ArrowLeftOutlined, ArrowUpOutlined, CopyOutlined, DeleteOutlined, EditOutlined, LeftOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons';
+import { ArrowDownOutlined, ArrowLeftOutlined, ArrowUpOutlined, CopyOutlined, DeleteOutlined, EditOutlined, DragOutlined, LeftOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons';
 import { actions, levelName, templateBlocksFor, useAppState, useStandard } from '../data/store';
 import { DEFAULT_TEMPLATE_ID, DEFAULT_TEMPLATE_NAME, fillTemplate, visibleTemplates } from '../core/templates';
 import { buildPages } from '../core/pages';
+import { pageToBlock } from '../core/canvas';
 import type { DeckBlock, DeckBlockKind } from '../core/types';
 import SlidePreview from '../deck/SlidePreview';
 import BlockEditor, { KIND_NAME, blankBlock, summary } from './BlockEditor';
@@ -103,6 +104,16 @@ function TemplateEditor({ templateId }: { templateId: string }) {
   const addItems = (['text', 'list', 'table', 'poster'] as DeckBlockKind[]).map((k) => ({ key: k, label: KIND_NAME[k] }));
   if (!hasPrasad) addItems.push({ key: 'prasad', label: KIND_NAME.prasad });
   addItems.push({ key: 'canvas', label: 'Custom slide (free layout)' });
+  /** An ordinary slide of the template becomes free-layout slides. {sabha} stays in the text, so each meeting still puts in its own sabha name. */
+  const freeBlock = (i: number) => {
+    const b = blocks[i];
+    if (!b || b.kind === 'prasad') return;
+    const mine = buildPages([b], [], std).map((p) => pageToBlock(p, std));
+    if (!mine.length) return;
+    const n = [...blocks.slice(0, i), ...mine, ...blocks.slice(i + 1)];
+    setBlocks(n);
+    setEditor(Math.max(0, n.slice(0, i).reduce((c, x) => c + (x.kind === 'canvas' ? 1 : buildPages([x], [{ id: 'd', name: 'x', occasion: '' }], std).length), 0)));
+  };
   const showBlock = (i: number) => { const n = pageBlockIndex.indexOf(i); if (n >= 0) setCursor(n); };
 
   return (
@@ -129,6 +140,11 @@ function TemplateEditor({ templateId }: { templateId: string }) {
                   : (b.kind === 'opening' || b.kind === 'closing')
                     ? <Tooltip title="Open in the slide editor"><Button size="small" icon={<EditOutlined />} onClick={() => setEditor(Math.max(0, pageBlockIndex.indexOf(i)))} aria-label="Open in the slide editor" /></Tooltip>
                     : <Tooltip title="Edit"><Button size="small" icon={<EditOutlined />} onClick={() => setEditing({ block: b, isNew: false })} aria-label="Edit slide" /></Tooltip>}
+                {b.kind !== 'canvas' && b.kind !== 'prasad' && (
+                  <Popconfirm title="Edit this slide freely?" description="You can then move and restyle everything on it. It keeps its wording and look, but no longer follows later changes to the slide standard." okText="Edit freely" onConfirm={() => freeBlock(i)}>
+                    <Tooltip title="Edit freely: move things where you want"><Button size="small" icon={<DragOutlined />} aria-label="Edit freely" /></Tooltip>
+                  </Popconfirm>
+                )}
                 <Tooltip title="Remove"><Button size="small" danger icon={<DeleteOutlined />} onClick={() => setBlocks(blocks.filter((x) => x.id !== b.id))} aria-label="Remove slide" /></Tooltip>
               </Space>
             </div>

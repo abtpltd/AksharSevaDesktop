@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { App, AutoComplete, Button, Checkbox, Dropdown, Input, Modal, Select, Space, Switch, Tooltip } from 'antd';
-import { HistoryOutlined, SaveOutlined, ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, LeftOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons';
+import { App, AutoComplete, Button, Checkbox, Dropdown, Input, Modal, Popconfirm, Select, Space, Switch, Tooltip } from 'antd';
+import { HistoryOutlined, SaveOutlined, ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, DragOutlined, LeftOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons';
 import { actions, pastDonors, useAppState, useStandard } from '../data/store';
 import type { DeckBlock, DeckBlockKind, DonorContact, DonorKind, DonorStyle, Meeting } from '../core/types';
 import { displayName, makeDonor, matchContacts, KIND_NAMES, STYLE_NAMES } from '../core/donors';
 import { buildPages, slidesOfBlock } from '../core/pages';
+import { pageToBlock } from '../core/canvas';
 import { uid } from '../core/defaults';
 import SlidePreview from '../deck/SlidePreview';
 import { go } from '../ui/router';
@@ -45,6 +46,15 @@ export default function AnnouncementsTab({ meeting: m, sabhaName }: { meeting: M
   useEffect(() => { if (cursor > pages.length - 1) setCursor(Math.max(0, pages.length - 1)); }, [pages.length, cursor]);
 
   const setDeck = (deck: DeckBlock[], note?: string) => actions.setDeck(m.id, deck, note);
+  /** An ordinary slide becomes free-layout slides (one for each of its slides) with the same wording and look, and opens in the slide editor. */
+  const freeBlock = (b: DeckBlock) => {
+    const mine = pages.filter((p) => p.blockId === b.id).map((p) => pageToBlock(p, std));
+    const i = m.deck.findIndex((x) => x.id === b.id);
+    if (!mine.length || i < 0) return;
+    const next = [...m.deck.slice(0, i), ...mine, ...m.deck.slice(i + 1)];
+    setDeck(next, `Made "${summary(b, m.donors.length)}" a free-layout slide`);
+    setEditor(Math.max(0, (slidesOfBlock(buildPages(next, m.donors, std), mine[0].id)[0] ?? 1) - 1));
+  };
   const [showHistory, setShowHistory] = useState(false);
   const removeBlock = (b: DeckBlock) => {
     setDeck(m.deck.filter((x) => x.id !== b.id), `Removed "${summary(b, m.donors.length)}"`);
@@ -118,6 +128,11 @@ export default function AnnouncementsTab({ meeting: m, sabhaName }: { meeting: M
                 {b.kind === 'canvas'
                   ? <Tooltip title="Open in the slide editor"><Button size="small" icon={<EditOutlined />} onClick={() => setEditor(Math.max(0, slidesOfBlock(pages, b.id)[0] - 1))} /></Tooltip>
                   : b.kind !== 'opening' && b.kind !== 'closing' && <Tooltip title="Edit"><Button size="small" icon={<EditOutlined />} onClick={() => setEditing({ block: b, isNew: false })} /></Tooltip>}
+                {b.kind !== 'canvas' && slides.length > 0 && (
+                  <Popconfirm title="Edit this slide freely?" description="You can then move and restyle everything on it. It keeps its wording and look, but no longer follows later changes to its text, the donor list or the slide standard." okText="Edit freely" onConfirm={() => freeBlock(b)}>
+                    <Tooltip title="Edit freely: move things where you want"><Button size="small" icon={<DragOutlined />} aria-label="Edit freely" /></Tooltip>
+                  </Popconfirm>
+                )}
                 <Tooltip title="Remove"><Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeBlock(b)} /></Tooltip>
               </Space>
             </div>
