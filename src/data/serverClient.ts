@@ -5,7 +5,7 @@ export class ServerError extends Error {
   constructor(public status: number, message: string, public body?: unknown) { super(message); }
 }
 
-const KINDS = ['standard', 'sabha', 'meeting', 'program-item', 'slide', 'donor', 'ticker', 'cursor', 'screen', 'poster', 'deck-template', 'announcement'];
+const KINDS = ['standard', 'sabha', 'meeting', 'program-item', 'slide', 'donor', 'ticker', 'cursor', 'screen', 'poster', 'deck-template', 'announcement', 'donor-contact'];
 const TIMEOUT_MS = 30_000;
 const THIS_COMPUTER = new Set(['localhost', '127.0.0.1', '[::1]']);
 

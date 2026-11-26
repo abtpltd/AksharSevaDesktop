@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { App, AutoComplete, Button, Dropdown, Input, Modal, Select, Space, Switch, Tooltip } from 'antd';
+import { App, AutoComplete, Button, Checkbox, Dropdown, Input, Modal, Select, Space, Switch, Tooltip } from 'antd';
 import { HistoryOutlined, SaveOutlined, ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, LeftOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons';
 import { actions, pastDonors, useAppState, useStandard } from '../data/store';
-import type { DeckBlock, DeckBlockKind, Meeting } from '../core/types';
+import type { DeckBlock, DeckBlockKind, DonorContact, DonorKind, DonorStyle, Meeting } from '../core/types';
+import { displayName, makeDonor, matchContacts, KIND_NAMES, STYLE_NAMES } from '../core/donors';
 import { buildPages, slidesOfBlock } from '../core/pages';
 import { uid } from '../core/defaults';
 import SlidePreview from '../deck/SlidePreview';
@@ -21,6 +22,12 @@ export default function AnnouncementsTab({ meeting: m, sabhaName }: { meeting: M
   const [cursor, setCursor] = useState(0);
   const [editing, setEditing] = useState<{ block: DeckBlock; isNew: boolean } | null>(null);
   const [dn, setDn] = useState('');
+  const [picked, setPicked] = useState<DonorContact | null>(null);
+  const [fam, setFam] = useState(false);
+  const [sty, setSty] = useState<DonorStyle | undefined>(undefined);
+  const [keep, setKeep] = useState(false);
+  const [newKind, setNewKind] = useState<DonorKind>('satsangi');
+  const [newCompany, setNewCompany] = useState('');
   const [dOcc, setDOcc] = useState('');
   const [dErr, setDErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -55,10 +62,18 @@ export default function AnnouncementsTab({ meeting: m, sabhaName }: { meeting: M
   const hasPrasad = m.deck.some((b) => b.kind === 'prasad');
 
   const addDonor = () => {
-    const name = dn.trim();
+    let name = dn.trim();
     if (!name) { setDErr('Enter the donor name first'); return; }
-    actions.setDonors(m.id, [...m.donors, { id: uid(), name, occasion: dOcc.trim() }]);
-    setDn(''); setDOcc(''); setDErr('');
+    let contact = picked;
+    if (!contact && keep) {
+      const r = actions.addContact({ name, kind: newKind, company: newCompany, family: fam });
+      if (!r.ok) { setDErr(r.error); return; }
+      contact = { id: r.id, org: s.workingOrg, name: name.replace(/\s+/g, ' ').trim(), kind: newKind, company: newKind === 'satsangi' ? newCompany.trim() : '', family: newKind === 'satsangi' && fam };
+    }
+    const donor = makeDonor(uid(), contact, !contact && fam ? `${name} & Family` : name, dOcc, { family: fam, style: sty });
+    name = donor.name;
+    actions.setDonors(m.id, [...m.donors, donor]);
+    setDn(''); setDOcc(''); setDErr(''); setPicked(null); setFam(false); setSty(undefined); setKeep(false); setNewCompany(''); setNewKind('satsangi');
     (document.activeElement as HTMLElement | null)?.blur?.();
     const pb = m.deck.find((b) => b.kind === 'prasad');
     if (pb) setTimeout(() => { const ns = slidesOfBlock(buildPages(m.deck, [...m.donors, { id: 'x', name, occasion: '' }], std), pb.id); if (ns.length) setCursor(ns[ns.length - 1] - 1); }, 0);
@@ -119,12 +134,45 @@ export default function AnnouncementsTab({ meeting: m, sabhaName }: { meeting: M
           <div style={{ marginTop: 20 }}>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>Prasad sponsors ({m.donors.length})</div>
             <AutoComplete
-              style={{ width: '100%' }} value={dn} options={suggestions.map((d) => ({ value: d.name, label: d.occasion ? `${d.name} (${d.occasion})` : d.name }))}
-              filterOption={(input, o) => (o?.value ?? '').toString().toLowerCase().includes(input.toLowerCase())}
-              onChange={(v) => { setDn(v); setDErr(''); }}
-              onSelect={(v) => { const hit = suggestions.find((d) => d.name === v); if (hit && !dOcc) setDOcc(hit.occasion); }}
+              style={{ width: '100%' }} value={dn}
+              options={[
+                ...(dn.trim() ? matchContacts(s.contacts, dn).map((c) => ({ value: `c:${c.id}`, label: <span>{displayName(c, { family: c.family })} <span className="muted">· {KIND_NAMES[c.kind]}</span></span> })) : []),
+                ...suggestions.filter((d) => !d.contactId && d.name.toLowerCase().includes(dn.trim().toLowerCase()) && dn.trim()).slice(0, 5).map((d) => ({ value: `p:${d.id}`, label: <span>{d.occasion ? `${d.name} (${d.occasion})` : d.name} <span className="muted">· earlier</span></span> })),
+              ]}
+              onChange={(v) => { if (!/^[cp]:/.test(v)) { setDn(v); setPicked(null); setDErr(''); } }}
+              onSelect={(v) => {
+                if (v.startsWith('c:')) { const c = s.contacts.find((x) => x.id === v.slice(2)); if (c) { setPicked(c); setDn(c.name); setFam(c.family); setSty(undefined); setKeep(false); } }
+                else { const hit = suggestions.find((d) => `p:${d.id}` === v); if (hit) { setDn(hit.name); setPicked(null); if (!dOcc) setDOcc(hit.occasion); } }
+              }}
               placeholder="Donor name"
             />
+            {picked ? (
+              <div style={{ marginTop: 6, fontSize: 12 }}>
+                <span className="muted">From the directory · {KIND_NAMES[picked.kind]}. </span>
+                <Button type="link" size="small" style={{ padding: 0 }} onClick={() => { setPicked(null); }}>Use as typed instead</Button>
+              </div>
+            ) : null}
+            {(!picked || picked.kind === 'satsangi') && dn.trim() ? (
+              <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+                <Checkbox checked={fam} onChange={(e) => setFam(e.target.checked)} disabled={!!picked && picked.kind !== 'satsangi'}>& Family</Checkbox>
+                {picked && picked.kind === 'satsangi' && picked.company ? (
+                  <Select<DonorStyle> size="small" style={{ width: 170 }} value={sty ?? 'name-company'} onChange={setSty} aria-label="How the name shows"
+                    options={(Object.keys(STYLE_NAMES) as DonorStyle[]).map((k) => ({ value: k, label: STYLE_NAMES[k] }))} />
+                ) : null}
+              </div>
+            ) : null}
+            {!picked && dn.trim() ? (
+              <div style={{ marginTop: 6 }}>
+                <Checkbox checked={keep} onChange={(e) => setKeep(e.target.checked)}>Save to the donor directory</Checkbox>
+                {keep ? (
+                  <Space style={{ marginTop: 6 }} wrap>
+                    <Select<DonorKind> size="small" style={{ width: 110 }} value={newKind} onChange={setNewKind} aria-label="Kind" options={(Object.keys(KIND_NAMES) as DonorKind[]).map((k) => ({ value: k, label: KIND_NAMES[k] }))} />
+                    {newKind === 'satsangi' ? <Input size="small" style={{ width: 170 }} value={newCompany} onChange={(e) => setNewCompany(e.target.value)} placeholder="Company (optional)" aria-label="Company" /> : null}
+                  </Space>
+                ) : null}
+              </div>
+            ) : null}
+            {dn.trim() ? <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>On the slide: <b>{(() => { const c = picked ?? (keep ? { name: dn, kind: newKind, company: newCompany } : null); return c ? displayName(c, { family: fam && c.kind === 'satsangi', style: picked ? sty : undefined }) : dn.trim() + (fam ? ' & Family' : ''); })()}</b></div> : null}
             <Input style={{ marginTop: 6 }} value={dOcc} onChange={(e) => setDOcc(e.target.value)} placeholder="On occasion of" onPressEnter={addDonor} />
             {dErr ? <div style={{ color: '#d64545', fontSize: 12, marginTop: 4 }}>{dErr}</div> : null}
             <Button type="primary" style={{ marginTop: 8 }} onClick={addDonor} block>Add to slides</Button>

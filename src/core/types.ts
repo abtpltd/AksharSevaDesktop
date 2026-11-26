@@ -28,10 +28,30 @@ export interface ProgramItem {
   remark: string;
 }
 
+/** What the slide shows for a donor from the directory: the name, the name with the company in brackets, or the company alone. */
+export type DonorStyle = 'name' | 'name-company' | 'company';
+export type DonorKind = 'satsangi' | 'company' | 'other';
+
+/** One entry of a center's donor directory. A company or other entry is shown as its name; a satsangi may also have a company. */
+export interface DonorContact {
+  id: string;
+  /** The center this entry belongs to. Directories are never shared between centers. */
+  org: string;
+  name: string;
+  kind: DonorKind;
+  company: string;
+  /** Show "& Family" after the name by default. */
+  family: boolean;
+}
+
+/** One line of a meeting's prasad sponsors. `name` is the text shown on the slide; the rest says where it came from. A name typed once has none of them. */
 export interface Donor {
   id: string;
   name: string;
   occasion: string;
+  contactId?: string;
+  family?: boolean;
+  style?: DonorStyle;
 }
 
 export type DeckBlock =
@@ -140,4 +160,6 @@ export interface AppState {
   templates: SlideTemplate[];
   /** The poster library: pictures added once, chosen for any poster slide. */
   posters: PosterItem[];
+  /** The donor directory of the working center. */
+  contacts: DonorContact[];
 }

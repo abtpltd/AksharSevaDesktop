@@ -29,6 +29,31 @@ describe('taking the state apart and putting it together', () => {
     expect(back.templates).toEqual(s.templates);
     expect(back.standards).toEqual(s.standards);
   });
+  it('donor directory entries and donors with their extras survive the round trip', () => {
+    __resetForTests();
+    const m = actions.createMeeting(getState().sabhas[0], '2026-12-13', '17:00', 'Mandir');
+    const r = actions.addContact({ name: 'Ramesh Patel', kind: 'satsangi', company: 'Patel Hardware', family: true });
+    expect(r.ok).toBe(true);
+    const id = r.ok ? r.id : '';
+    actions.setDonors(m.id, [{ id: 'd1', name: 'Ramesh Patel & Family', occasion: 'Diwali', contactId: id, family: true, style: 'name' }, { id: 'd2', name: 'Visitor', occasion: '' }]);
+    const s = getState();
+    const back = fromRecs(s, explode(s, newPlace()), '2026-01-01T00:00:00Z');
+    expect(back.contacts).toEqual(s.contacts);
+    expect(back.meetings[0].donors).toEqual(s.meetings[0].donors);
+  });
+  it('changing a directory entry updates the slide lines made from it, and a repeat is refused', () => {
+    __resetForTests();
+    const m = actions.createMeeting(getState().sabhas[0], '2026-12-13', '17:00', 'Mandir');
+    const r = actions.addContact({ name: 'Ramesh Patel', kind: 'satsangi', company: '', family: false });
+    const id = r.ok ? r.id : '';
+    expect(actions.addContact({ name: 'ramesh  patel', kind: 'satsangi', company: '', family: false }).ok).toBe(false);
+    actions.setDonors(m.id, [{ id: 'd1', name: 'Ramesh Patel & Family', occasion: '', contactId: id, family: true }]);
+    expect(actions.updateContact(id, { name: 'Ramesh Shah', kind: 'satsangi', company: '', family: false }).ok).toBe(true);
+    expect(getState().meetings[0].donors[0].name).toBe('Ramesh Shah & Family');
+    actions.removeContact(id);
+    expect(getState().contacts).toEqual([]);
+    expect(getState().meetings[0].donors[0].name).toBe('Ramesh Shah & Family');
+  });
   it('a level that changes nothing has no record; one that changes something is named by its center', () => {
     expect(standardBody({ values: {}, locks: [] })).toBeNull();
     expect(standardBody({ values: { perSlide: 2 }, locks: ['perSlide'] })).toEqual({ perSlide: 2, _locks: ['perSlide'] });

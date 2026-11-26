@@ -1,6 +1,6 @@
 import { ancestry } from '../core/cascade';
 import { defaultStandard } from '../core/defaults';
-import type { AppState, DeckBlock, Donor, LevelValues, Meeting, PosterItem, ProgramItem, Sabha, SlideStandard, SlideTemplate, StandardKey } from '../core/types';
+import type { AppState, DeckBlock, Donor, DonorContact, LevelValues, Meeting, PosterItem, ProgramItem, Sabha, SlideStandard, SlideTemplate, StandardKey } from '../core/types';
 
 /**
  * How the screens' view of the data is seen by the server (D33, D59): every sabha, the header of every meeting, and every program item,
@@ -8,8 +8,8 @@ import type { AppState, DeckBlock, Donor, LevelValues, Meeting, PosterItem, Prog
  * `explode` takes the state apart for sending and `fromRecs` puts it together again after something came down.
  * Nothing here is kept between page loads: the server is the only copy.
  */
-export type Kind = 'sabha' | 'meeting' | 'program-item' | 'slide' | 'donor' | 'standard' | 'deck-template' | 'poster';
-export const ALL_KINDS: Kind[] = ['sabha', 'meeting', 'program-item', 'slide', 'donor', 'standard', 'deck-template', 'poster']; // parents before children
+export type Kind = 'sabha' | 'meeting' | 'program-item' | 'slide' | 'donor' | 'standard' | 'deck-template' | 'poster' | 'donor-contact';
+export const ALL_KINDS: Kind[] = ['sabha', 'meeting', 'program-item', 'slide', 'donor', 'standard', 'deck-template', 'poster', 'donor-contact']; // parents before children
 export const keyOf = (kind: Kind, id: string): string => `${kind}:${id}`;
 export const isItemKind = (k: Kind): boolean => k === 'program-item' || k === 'slide' || k === 'donor';
 export const kindOfKey = (key: string): Kind => key.slice(0, key.indexOf(':')) as Kind;
@@ -138,6 +138,7 @@ export function explode(s: AppState, place: Place): Map<string, Rec> {
   }
   for (const t of s.templates) out.set(keyOf('deck-template', t.id), { kind: 'deck-template', id: t.id, org: t.org, body: { id: t.id, name: t.name, blocks: t.blocks }, src: t });
   for (const p of s.posters) out.set(keyOf('poster', p.id), { kind: 'poster', id: p.id, org: p.org, body: { id: p.id, name: p.name, image: p.image, addedAt: p.addedAt }, src: p });
+  for (const c of s.contacts) out.set(keyOf('donor-contact', c.id), { kind: 'donor-contact', id: c.id, org: c.org, body: { id: c.id, name: c.name, kind: c.kind, company: c.company, family: c.family }, src: c });
   return out;
 }
 
@@ -150,7 +151,7 @@ const BUILTIN_ORDER = ['ravi', 'para', 'gyan', 'prarthna'];
  * so screens that did not change do not redraw. The history of a deck (kept while the page is open) stays with its meeting.
  */
 export function fromRecs(s: AppState, recs: Map<string, Rec>, stamp: string): AppState {
-  const sabhas: Sabha[] = [], templates: SlideTemplate[] = [], posters: PosterItem[] = [];
+  const sabhas: Sabha[] = [], templates: SlideTemplate[] = [], posters: PosterItem[] = [], contacts: DonorContact[] = [];
   const standards: Record<string, LevelValues> = {};
   const items = new Map<string, { program: Rec[]; slide: Rec[]; donor: Rec[] }>();
   const headers: Rec[] = [];
@@ -158,6 +159,7 @@ export function fromRecs(s: AppState, recs: Map<string, Rec>, stamp: string): Ap
     if (rec.kind === 'sabha') { const prev = s.sabhas.find((x) => x.id === rec.id); sabhas.push(prev && canon(prev) === canon(rec.body) ? prev : (rec.body as unknown as Sabha)); }
     else if (rec.kind === 'deck-template') { const prev = s.templates.find((x) => x.id === rec.id); const t: SlideTemplate = { id: rec.id, name: rec.body.name as string, org: rec.org, blocks: rec.body.blocks as DeckBlock[] }; templates.push(prev && canon(prev) === canon(t) ? prev : t); }
     else if (rec.kind === 'poster') { const prev = s.posters.find((x) => x.id === rec.id); const p: PosterItem = { id: rec.id, name: rec.body.name as string, org: rec.org, image: rec.body.image as string, addedAt: rec.body.addedAt as string }; posters.push(prev && canon(prev) === canon(p) ? prev : p); }
+    else if (rec.kind === 'donor-contact') { const prev = s.contacts.find((x) => x.id === rec.id); const c: DonorContact = { id: rec.id, org: rec.org, name: rec.body.name as string, kind: rec.body.kind as DonorContact['kind'], company: rec.body.company as string, family: rec.body.family as boolean }; contacts.push(prev && canon(prev) === canon(c) ? prev : c); }
     else if (rec.kind === 'standard') { const lv = readStandard(rec.body); const prev = s.standards[rec.org]; standards[rec.org] = prev && canon(prev) === canon(lv) ? prev : lv; }
     else if (rec.kind === 'meeting') headers.push(rec);
     else {
@@ -189,7 +191,8 @@ export function fromRecs(s: AppState, recs: Map<string, Rec>, stamp: string): Ap
   sabhas.sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1));
   templates.sort((a, b) => a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1));
   posters.sort((a, b) => a.addedAt.localeCompare(b.addedAt) || (a.id < b.id ? -1 : 1));
-  return { ...s, sabhas, meetings, templates, posters, standards };
+  contacts.sort((a, b) => a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1));
+  return { ...s, sabhas, meetings, templates, posters, contacts, standards };
 }
 
 /** The levels from the top down to a center, named from their last word ("nairobi-mandir" is "Nairobi Mandir"), for the screens that show a level. */
@@ -211,6 +214,7 @@ export function normalizeBody(kind: Kind, b: Record<string, unknown>): Record<st
     case 'slide': return { id: b.id, meetingId: b.meetingId, pos: b.pos, block: b.block };
     case 'deck-template': return { id: b.id, name: b.name, blocks: b.blocks };
     case 'poster': return { id: b.id, name: b.name, image: b.image, addedAt: b.addedAt };
+    case 'donor-contact': return { id: b.id, name: b.name, kind: b.kind, company: b.company, family: b.family };
     default: return b;
   }
 }

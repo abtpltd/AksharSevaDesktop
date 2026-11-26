@@ -21,7 +21,7 @@ describe('uuid ids for the built-in sabhas', () => {
 
 describe('moving an older save to UUIDs', () => {
   const old = (): AppState => ({
-    standards: {}, levels: [], workingOrg: 'world', templates: [], posters: [],
+    standards: {}, levels: [], workingOrg: 'world', templates: [], posters: [], contacts: [],
     sabhas: [
       { id: 'sabha-ravi', name: 'Ravi Sabha', kind: 'weekly', usualPattern: '', defaultVenue: '', defaultStart: '17:00', defaultMinutes: 120 },
       { id: 'sabha-prarthna', name: 'Prarthna Sabha', kind: 'event', usualPattern: '', defaultVenue: '', defaultStart: '10:00', defaultMinutes: 30 },

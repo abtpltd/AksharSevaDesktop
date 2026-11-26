@@ -113,6 +113,7 @@ export function createLive({ connection, store, debounceMs = 800, pollMs = 20_00
       case 'donor': return `Donor "${rec.body.name}" in meeting ${meetingName(recs, String(rec.body.meetingId))}`;
       case 'deck-template': return `Template "${rec.body.name}"`;
       case 'poster': return `Poster "${rec.body.name}"`;
+      case 'donor-contact': return `Donor "${rec.body.name}" in the directory`;
       default: return `The slide standard of ${rec.org}`;
     }
   };

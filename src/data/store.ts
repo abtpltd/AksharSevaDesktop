@@ -4,8 +4,9 @@ import { effective } from '../core/cascade';
 import { DEFAULT_WORKING_ORG, defaultSabhas, templateFor, uid } from '../core/defaults';
 import { DEFAULT_TEMPLATE_ID, DEFAULT_TEMPLATE_NAME, defaultTemplateBlocks, fillTemplate, stripForTemplate, visibleTemplates } from '../core/templates';
 import { levelsFor } from './records';
+import { contactProblem, MAX_CONTACTS, refreshDonor } from '../core/donors';
 import { isPictureData, MAX_POSTER_NAME, MAX_POSTERS } from '../core/library';
-import type { AppState, DeckBlock, Donor, Level, Meeting, ProgramItem, Sabha, SlideStandard, SlideTemplate, StandardKey } from '../core/types';
+import type { AppState, DeckBlock, Donor, DonorContact, DonorKind, Level, Meeting, ProgramItem, Sabha, SlideStandard, SlideTemplate, StandardKey } from '../core/types';
 
 /**
  * The screens' view of the data (D59). Nothing is kept on this computer: the view is filled from the server (see live.ts), every change
@@ -13,7 +14,7 @@ import type { AppState, DeckBlock, Donor, Level, Meeting, ProgramItem, Sabha, Sl
  */
 const HISTORY_MAX = 20;
 
-const fresh = (org: string = DEFAULT_WORKING_ORG): AppState => ({ standards: {}, levels: levelsFor(org), workingOrg: org, sabhas: defaultSabhas(), meetings: [], templates: [], posters: [] });
+const fresh = (org: string = DEFAULT_WORKING_ORG): AppState => ({ standards: {}, levels: levelsFor(org), workingOrg: org, sabhas: defaultSabhas(), meetings: [], templates: [], posters: [], contacts: [] });
 
 let state: AppState = fresh();
 const listeners = new Set<() => void>();
@@ -150,6 +151,33 @@ export const actions = {
   removePoster(id: string): void {
     if (!state.posters.some((x) => x.id === id && x.org === state.workingOrg)) return;
     commit({ ...state, posters: state.posters.filter((x) => x.id !== id) });
+  },
+  /** Adds someone to the donor directory of the working center. Says why when it cannot. */
+  addContact(c: { name: string; kind: DonorKind; company: string; family: boolean }): { ok: true; id: string } | { ok: false; error: string } {
+    const mine = state.contacts.filter((x) => x.org === state.workingOrg);
+    const bad = contactProblem(c, mine);
+    if (bad) return { ok: false, error: bad };
+    if (mine.length >= MAX_CONTACTS) return { ok: false, error: `The directory is full (${MAX_CONTACTS} names)` };
+    const id = uid();
+    const next: DonorContact = { id, org: state.workingOrg, name: c.name.replace(/\s+/g, ' ').trim(), kind: c.kind, company: c.kind === 'satsangi' ? c.company.replace(/\s+/g, ' ').trim() : '', family: c.kind === 'satsangi' && c.family };
+    commit({ ...state, contacts: [...state.contacts, next] });
+    return { ok: true, id };
+  },
+  /** Changes an entry of the working center's directory. The slide lines of meetings made from it follow the new name. */
+  updateContact(id: string, c: { name: string; kind: DonorKind; company: string; family: boolean }): { ok: true } | { ok: false; error: string } {
+    const cur = state.contacts.find((x) => x.id === id && x.org === state.workingOrg);
+    if (!cur) return { ok: false, error: 'This name cannot be changed here' };
+    const bad = contactProblem(c, state.contacts.filter((x) => x.org === cur.org), id);
+    if (bad) return { ok: false, error: bad };
+    const next: DonorContact = { ...cur, name: c.name.replace(/\s+/g, ' ').trim(), kind: c.kind, company: c.kind === 'satsangi' ? c.company.replace(/\s+/g, ' ').trim() : '', family: c.kind === 'satsangi' && c.family };
+    const contacts = state.contacts.map((x) => (x.id === id ? next : x));
+    commit({ ...state, contacts, meetings: state.meetings.map((m) => (m.donors.some((d) => d.contactId === id) ? { ...m, donors: m.donors.map((d) => (d.contactId === id ? refreshDonor(d, contacts) : d)) } : m)) });
+    return { ok: true };
+  },
+  /** Removes an entry. Slide lines already made from it keep their text. */
+  removeContact(id: string): void {
+    if (!state.contacts.some((x) => x.id === id && x.org === state.workingOrg)) return;
+    commit({ ...state, contacts: state.contacts.filter((x) => x.id !== id) });
   },
   /** Keeps this meeting's slide structure as a template (poster pictures and donors are not kept). */
   saveDeckAsTemplate(meetingId: string, name: string): string | null {

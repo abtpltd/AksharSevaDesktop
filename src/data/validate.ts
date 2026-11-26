@@ -1,5 +1,6 @@
 import { isPictureData } from '../core/library';
 import { validCanvas } from '../core/canvas';
+import { isDonorKind, isDonorStyle } from '../core/donors';
 import type { Kind } from './records';
 
 /**
@@ -17,7 +18,7 @@ const SABHA_KINDS = new Set(['weekly', 'flexible', 'event']);
 const BUILTIN = new Set(['ravi', 'para', 'gyan', 'prarthna']);
 
 const program = (x: unknown): boolean => isObj(x) && str(x.id) && str(x.item) && MEDIA.has(x.medium as string) && str(x.presenter) && num(x.minutes) && str(x.remark);
-const donor = (x: unknown): boolean => isObj(x) && str(x.id) && str(x.name) && str(x.occasion);
+const donor = (x: unknown): boolean => isObj(x) && str(x.id) && str(x.name) && str(x.occasion) && (x.contactId === undefined || str(x.contactId)) && (x.family === undefined || typeof x.family === 'boolean') && (x.style === undefined || isDonorStyle(x.style));
 export const validBlock = (x: unknown): boolean => {
   if (!isObj(x) || !str(x.id)) return false;
   switch (x.kind) {
@@ -43,6 +44,7 @@ const validItem = (kind: Kind, b: unknown): boolean =>
   isObj(b) && str(b.id) && str(b.meetingId) && num(b.pos) &&
   (kind === 'program-item' ? program(b) : kind === 'donor' ? donor(b) : validBlock(b.block) && (b.block as { id: string }).id === b.id);
 const validTemplate = (b: unknown): boolean => isObj(b) && str(b.id) && str(b.name) && list(b.blocks, validBlock);
+const validContact = (b: unknown): boolean => isObj(b) && str(b.id) && str(b.name) && isDonorKind(b.kind) && str(b.company) && typeof b.family === 'boolean';
 const validPoster = (b: unknown): boolean => isObj(b) && str(b.id) && str(b.name) && str(b.addedAt) && isPictureData(b.image);
 
 /** A level's standard is read setting by setting (see readStandard), so any object will do. */
@@ -52,4 +54,5 @@ export const validBody = (kind: Kind, b: unknown): boolean =>
     : kind === 'meeting' ? validHeader(b)
     : kind === 'deck-template' ? validTemplate(b)
     : kind === 'poster' ? validPoster(b)
+    : kind === 'donor-contact' ? validContact(b)
     : validItem(kind, b);
